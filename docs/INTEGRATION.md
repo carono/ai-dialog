@@ -385,7 +385,7 @@ HTTPS и проксирует WebSocket на шлюз.
 - проксирование на `http://<хост-где-шлюз>:8787` с обязательным WebSocket-upgrade;
 - домен должен резолвиться в браузере.
 
-**Пример nginx** (этот образец лежит в `deploy/nginx/`):
+**Пример nginx:**
 ```nginx
 server { listen 80; server_name wss.example.com; return 301 https://$host$request_uri; }
 server {
@@ -415,9 +415,9 @@ server {
 >   поэтому отдельный cert для поддомена не нужен.
 > - каталог `conf.d` примонтирован **read-only**, а файлы в `/root/docker` принадлежат root.
 >   Записать конфиг и тронуть Windows hosts можно только под root — делегируй это
->   сессии с правами через skill **`ask-session`** (или попроси пользователя). Готовый
->   автоматизирующий скрипт: `deploy/register-wss.sh` (создаёт конфиг, добавляет hosts,
->   делает `nginx -t` + reload).
+>   сессии с правами через skill **`ask-session`** (или попроси пользователя): положить
+>   конфиг по образцу выше в `conf.d`, затем `docker exec nginx nginx -t` и
+>   `docker exec nginx nginx -s reload`.
 > - DNS поддоменов `*.carono.site` ведётся через Windows hosts
 >   (`C:\Windows\System32\drivers\etc\hosts`); запись туда требует прав Windows-админа —
 >   это делает пользователь.
