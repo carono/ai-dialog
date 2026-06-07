@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AI Dialog — dev harness</title>
+    <meta name="description" content="Страница для локальной разработки виджета" />
+  </head>
+  <body>
+    <main style="max-width: 640px; margin: 40px auto; font-family: sans-serif">
+      <h1>Dev-страница виджета</h1>
+      <p data-ai-component="DevPage">
+        Это тестовая страница. Виджет в правом нижнем углу. По умолчанию он соединяется
+        с <code>ws://localhost:8787</code> и проектом <code>demo</code>.
+      </p>
+    </main>
+    <!-- В dev currentScript=null (module), поэтому используются значения по умолчанию. -->
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

@@ -1,0 +1,12 @@
+{
+  "demo": {
+    "endpoint": "dashboard",
+    "token": "demo-secret"
+  },
+  "myapp": {
+    "endpoint": "claude-code",
+    "repoPath": "/mnt/p/projects/<group>/<project>",
+    "token": "change-me",
+    "allowWrite": false
+  }
+}
