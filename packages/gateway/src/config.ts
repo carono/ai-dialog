@@ -2,14 +2,14 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-export type EndpointKind = 'claude-code' | 'opencode' | 'dashboard' | 'dashboard-channel';
+export type EndpointKind = 'claude-code' | 'opencode' | 'dashboard' | 'carono-channel';
 
 export interface ProjectConfig {
   /** Какой эндпоинт обслуживает проект. */
   endpoint: EndpointKind;
   /** Абсолютный путь к репозиторию (для claude-code / opencode). */
   repoPath?: string;
-  /** id проекта в реестре дашборда (для endpoint dashboard-channel; опц., иначе резолв по repoPath). */
+  /** id проекта в реестре дашборда (для endpoint carono-channel; опц., иначе резолв по repoPath). */
   dashboardProjectId?: string;
   /** Секретный токен проекта. Если задан — виджет обязан прислать его в hello. */
   token?: string;

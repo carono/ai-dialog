@@ -5,7 +5,8 @@ import { renderContext } from './context-prompt.js';
 const STREAM_WAIT_MS = 20000;
 
 /**
- * Адаптер «наш дашборд» (claude.carono.ru) через BridgeController.
+ * Адаптер моста на channel-дашборд carono (локальный проект claude.carono.ru),
+ * через его BridgeController. Это интеграция с КОНКРЕТНОЙ системой, не generic.
  *
  * Контракт согласован с сессией дашборда (Bearer-auth, CSRF-free, headless-safe):
  *   POST {base}/channel/bridge/message  — create-or-resume по external_id + отправка
@@ -14,8 +15,8 @@ const STREAM_WAIT_MS = 20000;
  * Мост stateless: всегда шлём external_id = наш sessionId, дашборд держит маппинг
  * external→sess сам, создаёт полноценную channel-сессию, ведёт лог и все фичи.
  */
-export class DashboardChannelAdapter implements EndpointAdapter {
-  readonly kind = 'dashboard-channel';
+export class CaronoChannelAdapter implements EndpointAdapter {
+  readonly kind = 'carono-channel';
 
   private readonly base: string;
   private readonly secret: string;
@@ -29,7 +30,7 @@ export class DashboardChannelAdapter implements EndpointAdapter {
     if (!this.base || !this.secret) {
       yield {
         type: 'error',
-        message: 'dashboard-channel: задайте DASHBOARD_BASE_URL и DASHBOARD_SECRET в окружении шлюза',
+        message: 'carono-channel: задайте DASHBOARD_BASE_URL и DASHBOARD_SECRET в окружении шлюза',
       };
       return;
     }
@@ -72,7 +73,7 @@ export class DashboardChannelAdapter implements EndpointAdapter {
       }
     } catch (err) {
       if (input.signal.aborted) return;
-      yield { type: 'error', message: `dashboard-channel: ${(err as Error).message}` };
+      yield { type: 'error', message: `carono-channel: ${(err as Error).message}` };
     }
   }
 

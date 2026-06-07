@@ -2,7 +2,7 @@ import type { EndpointAdapter } from '@ai-dialog/shared';
 import type { ProjectConfig } from '../config.js';
 import { ClaudeCodeAdapter } from './claude-code.js';
 import { DashboardAdapter } from './dashboard.js';
-import { DashboardChannelAdapter } from './dashboard-channel.js';
+import { CaronoChannelAdapter } from './carono-channel.js';
 import { OpencodeAdapter } from './opencode.js';
 
 /** Кэш адаптеров по проекту (чтобы переиспользовать историю/сессии). */
@@ -24,8 +24,8 @@ function build(config: ProjectConfig): EndpointAdapter {
       return new ClaudeCodeAdapter(config);
     case 'dashboard':
       return new DashboardAdapter();
-    case 'dashboard-channel':
-      return new DashboardChannelAdapter(config);
+    case 'carono-channel':
+      return new CaronoChannelAdapter(config);
     case 'opencode':
       return new OpencodeAdapter(config);
     default:
