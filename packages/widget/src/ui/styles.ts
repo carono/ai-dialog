@@ -27,6 +27,8 @@ export const STYLES = `
 .header .dot { width: 8px; height: 8px; border-radius: 50%; background: #f85149; }
 .header .dot.ready { background: #3fb950; }
 .header .endpoint { font-size: 11px; opacity: .6; }
+.header .pin { background: none; border: none; cursor: pointer; font-size: 14px; line-height: 1; padding: 2px 4px; opacity: .4; filter: grayscale(1); }
+.header .pin.on { opacity: 1; filter: none; }
 .header .clear { background: rgba(255,255,255,.12); border: none; color: #fff; cursor: pointer; font-size: 11px; padding: 3px 8px; border-radius: 6px; }
 .header .clear:hover { background: rgba(255,255,255,.22); }
 .header .close { background: none; border: none; color: #fff; cursor: pointer; font-size: 18px; }

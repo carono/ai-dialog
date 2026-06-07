@@ -23,7 +23,10 @@ let nextId = 1;
 
 export function App({ project, gateway, token }: Props) {
   const histKey = `aidlg.hist.${project}`;
-  const [open, setOpen] = useState(false);
+  const pinnedKey = `aidlg.pinned.${project}`;
+  const [pinned, setPinned] = useState(() => loadFlag(pinnedKey));
+  // Если закреплено — панель открыта сразу при загрузке страницы.
+  const [open, setOpen] = useState(() => loadFlag(pinnedKey));
   const [status, setStatus] = useState<TransportStatus>('connecting');
   const [endpoint, setEndpoint] = useState('');
   const [diag, setDiag] = useState('');
@@ -141,6 +144,15 @@ export function App({ project, gateway, token }: Props) {
     activeId.current = null;
   }, []);
 
+  // Закрепить окно: оставаться открытым после перезагрузки страницы.
+  const togglePin = useCallback(() => {
+    setPinned((p) => {
+      const v = !p;
+      saveFlag(pinnedKey, v);
+      return v;
+    });
+  }, [pinnedKey]);
+
   // Очистить: новая сессия на шлюзе + чистый диалог и история.
   const clear = useCallback(() => {
     transportRef.current?.reset();
@@ -181,6 +193,13 @@ export function App({ project, gateway, token }: Props) {
             <span class={`dot ${status === 'ready' ? 'ready' : ''}`} />
             <span class="title">AI диалог</span>
             {endpoint && <span class="endpoint">{endpoint}</span>}
+            <button
+              class={`pin ${pinned ? 'on' : ''}`}
+              onClick={togglePin}
+              title={pinned ? 'Закреплено: окно открывается при загрузке' : 'Закрепить окно открытым'}
+            >
+              📌
+            </button>
             {messages.length > 0 && (
               <button class="clear" onClick={clear} title="Начать новый диалог">
                 Очистить
@@ -325,6 +344,22 @@ function saveHistory(key: string, msgs: Msg[]): void {
 function removeHistory(key: string): void {
   try {
     localStorage.removeItem(key);
+  } catch {
+    /* noop */
+  }
+}
+
+function loadFlag(key: string): boolean {
+  try {
+    return localStorage.getItem(key) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function saveFlag(key: string, value: boolean): void {
+  try {
+    localStorage.setItem(key, value ? '1' : '0');
   } catch {
     /* noop */
   }
