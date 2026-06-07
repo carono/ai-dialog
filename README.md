@@ -21,7 +21,6 @@
 - `packages/shared` — общий протокол (типы сообщений и интерфейс адаптера).
 - `packages/gateway` — Node-шлюз: WebSocket, реестр проектов, адаптеры эндпоинтов.
 - `packages/widget` — встраиваемый IIFE-бандл (`widget.js`).
-- `examples/demo-site` — пример подключения на «чужой» сайт.
 
 ## Быстрый старт
 

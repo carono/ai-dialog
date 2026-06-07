@@ -2,7 +2,7 @@
   "name": "ai-dialog",
   "version": "0.1.0",
   "private": true,
-  "description": "Встраиваемый виджет диалога с AI: контекст текущей страницы уходит в настраиваемый эндпоинт (Claude Code, opencode, дашборд)",
+  "description": "Встраиваемый виджет диалога с AI: контекст текущей страницы уходит в настраиваемый эндпоинт (Claude Code)",
   "type": "module",
   "scripts": {
     "build": "pnpm -r build",
