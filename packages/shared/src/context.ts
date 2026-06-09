@@ -1,60 +1,60 @@
 /**
- * Контекст текущей страницы, который виджет собирает в браузере и передаёт в шлюз.
+ * Context of the current page that the widget collects in the browser and passes to the gateway.
  *
- * Принцип: виджет отдаёт «координаты» — где пользователь находится и что видит.
- * Резолвить роут/URL в конкретные файлы исходников должен агент-эндпоинт
- * (Claude Code / opencode), у которого есть доступ к репозиторию.
+ * Principle: the widget provides "coordinates" — where the user is and what they see.
+ * Resolving the route/URL into specific source files is the job of the endpoint agent
+ * (Claude Code / opencode), which has access to the repository.
  */
 export interface PageContext {
-  /** Полный URL страницы (location.href). */
+  /** Full page URL (location.href). */
   url: string;
-  /** Путь маршрута (location.pathname; для SPA — актуальный после навигации). */
+  /** Route path (location.pathname; for SPA — current after navigation). */
   route: string;
-  /** Hash-часть (для hash-роутинга). */
+  /** Hash part (for hash routing). */
   hash: string;
-  /** Заголовок документа. */
+  /** Document title. */
   title: string;
-  /** Referrer, если есть. */
+  /** Referrer, if present. */
   referrer: string;
-  /** Язык интерфейса (document.documentElement.lang / navigator.language). */
+  /** Interface language (document.documentElement.lang / navigator.language). */
   lang: string;
-  /** Размер вьюпорта. */
+  /** Viewport size. */
   viewport: { width: number; height: number };
-  /** Извлечённые meta-теги (name/property -> content). */
+  /** Extracted meta tags (name/property -> content). */
   meta: Record<string, string>;
-  /** Текст, выделенный пользователем на момент отправки (если есть). */
+  /** Text selected by the user at the moment of sending (if any). */
   selection?: string;
-  /** Элемент, выбранный через инспектор виджета (кнопка «выбрать элемент»). */
+  /** Element picked via the widget inspector (the "pick element" button). */
   selectedElement?: SelectedElement;
-  /** Краткий срез видимого текста страницы (обрезается по лимиту). */
+  /** A short slice of the page's visible text (trimmed to a limit). */
   visibleText?: string;
-  /** Подсказки о фреймворке/стеке, обнаруженные эвристиками. */
+  /** Hints about the framework/stack, detected by heuristics. */
   hints?: FrameworkHints;
-  /** Последние ошибки из console.error / window.onerror. */
+  /** Recent errors from console.error / window.onerror. */
   errors?: PageError[];
 }
 
 export interface SelectedElement {
-  /** Уникальный CSS-путь к элементу. */
+  /** Unique CSS path to the element. */
   selector: string;
-  /** Тег в нижнем регистре. */
+  /** Tag in lowercase. */
   tag: string;
-  /** id, если есть. */
+  /** id, if present. */
   id?: string;
-  /** Классы, если есть. */
+  /** Classes, if present. */
   classes?: string[];
-  /** Видимый текст элемента (обрезается). */
+  /** Visible text of the element (trimmed). */
   text?: string;
-  /** outerHTML элемента (обрезается). */
+  /** outerHTML of the element (trimmed). */
   html?: string;
-  /** Геометрия на момент выбора. */
+  /** Geometry at the moment of selection. */
   rect?: { x: number; y: number; width: number; height: number };
 }
 
 export interface FrameworkHints {
-  /** Обнаруженные фреймворки: 'react' | 'vue' | 'angular' | 'svelte' | ... */
+  /** Detected frameworks: 'react' | 'vue' | 'angular' | 'svelte' | ... */
   frameworks: string[];
-  /** Значения data-* атрибутов, помеченных как подсказки (data-ai-*). */
+  /** Values of data-* attributes marked as hints (data-ai-*). */
   markers: Record<string, string>;
 }
 
@@ -64,6 +64,6 @@ export interface PageError {
   line?: number;
   column?: number;
   stack?: string;
-  /** Метка времени (epoch ms). */
+  /** Timestamp (epoch ms). */
   at: number;
 }

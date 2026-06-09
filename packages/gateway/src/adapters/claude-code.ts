@@ -6,35 +6,35 @@ const READONLY_TOOLS = ['Read', 'Grep', 'Glob', 'Bash'];
 const WRITE_TOOLS = [...READONLY_TOOLS, 'Edit', 'Write', 'MultiEdit'];
 
 const SYSTEM_PROMPT = [
-  'Ты — ассистент, встроенный в работающее приложение через виджет.',
-  'Пользователь задаёт вопрос, находясь на конкретной странице. В блоке <page_context>',
-  'даны «координаты»: URL, маршрут, заголовок, видимый текст, подсказки о фреймворке.',
-  'У тебя есть доступ к репозиторию этого приложения (рабочая директория — его корень).',
-  'Используй контекст, чтобы самостоятельно найти соответствующий роут/контроллер/компонент/шаблон',
-  'и отвечай предметно по коду. Если правки запрещены — только объясняй и показывай, не редактируй.',
+  'You are an assistant embedded into a running application through a widget.',
+  'The user asks a question while on a specific page. The <page_context> block',
+  'provides "coordinates": URL, route, title, visible text, framework hints.',
+  'You have access to this application\'s repository (the working directory is its root).',
+  'Use the context to locate the corresponding route/controller/component/template yourself',
+  'and answer concretely about the code. If edits are disallowed, only explain and show, do not edit.',
 ].join(' ');
 
 /**
- * Адаптер «сессия Claude Code» через @anthropic-ai/claude-agent-sdk.
- * Запускает агента с cwd = корень репозитория проекта; агент сам резолвит
- * контекст страницы в файлы исходников.
+ * The "Claude Code session" adapter via @anthropic-ai/claude-agent-sdk.
+ * Runs the agent with cwd = the project repository root; the agent resolves
+ * the page context into source files on its own.
  */
 export class ClaudeCodeAdapter implements EndpointAdapter {
   readonly kind = 'claude-code';
 
-  /** Маппинг нашей sessionId -> session_id агента (для продолжения диалога). */
+  /** Mapping of our sessionId -> agent session_id (to continue the dialog). */
   private readonly sdkSessions = new Map<string, string>();
 
   constructor(private readonly project: ProjectConfig) {
     if (!project.repoPath) {
-      throw new Error('claude-code адаптер требует repoPath в конфиге проекта');
+      throw new Error('claude-code adapter requires repoPath in the project config');
     }
   }
 
   async *send(input: AdapterInput): AsyncIterable<AgentEvent> {
     const { query } = await loadSdk();
 
-    const prompt = `${renderContext(input.context)}\n\nВопрос пользователя:\n${input.message}`;
+    const prompt = `${renderContext(input.context)}\n\nUser question:\n${input.message}`;
     const resume = this.sdkSessions.get(input.sessionId);
 
     const stream = query({
@@ -69,9 +69,9 @@ export class ClaudeCodeAdapter implements EndpointAdapter {
   }
 }
 
-/** Преобразует одно сообщение SDK в ноль или более наших событий. */
+/** Converts a single SDK message into zero or more of our events. */
 function* mapMessage(message: SdkMessage): Iterable<AgentEvent> {
-  // Инкрементальный текст — из частичных stream-событий.
+  // Incremental text — from partial stream events.
   if (message.type === 'stream_event' && message.event) {
     const ev = message.event;
     if (ev.type === 'content_block_delta' && ev.delta?.type === 'text_delta' && ev.delta.text) {
@@ -80,7 +80,7 @@ function* mapMessage(message: SdkMessage): Iterable<AgentEvent> {
     return;
   }
 
-  // Вызовы инструментов — из полных assistant-сообщений (текст уже пришёл дельтами).
+  // Tool calls — from full assistant messages (the text already arrived as deltas).
   if (message.type === 'assistant' && message.message?.content) {
     for (const block of message.message.content) {
       if (block.type === 'tool_use') {
@@ -90,7 +90,7 @@ function* mapMessage(message: SdkMessage): Iterable<AgentEvent> {
   }
 }
 
-/** Превращает AbortSignal в AbortController (SDK ожидает controller). */
+/** Turns an AbortSignal into an AbortController (the SDK expects a controller). */
 function toController(signal: AbortSignal): AbortController {
   const controller = new AbortController();
   if (signal.aborted) controller.abort();
@@ -98,7 +98,7 @@ function toController(signal: AbortSignal): AbortController {
   return controller;
 }
 
-// --- Загрузка SDK (динамически, чтобы шлюз стартовал без него для др. эндпоинтов) ---
+// --- SDK loading (dynamic, so the gateway starts without it for other endpoints) ---
 
 interface SdkModule {
   query: (args: { prompt: string; options: Record<string, unknown> }) => AsyncIterable<unknown>;
@@ -112,8 +112,8 @@ function loadSdk(): Promise<SdkModule> {
       (m) => m as unknown as SdkModule,
       (err) => {
         throw new Error(
-          `Не удалось загрузить @anthropic-ai/claude-agent-sdk: ${(err as Error).message}. ` +
-            'Установите пакет: pnpm --filter @ai-dialog/gateway add @anthropic-ai/claude-agent-sdk',
+          `Failed to load @anthropic-ai/claude-agent-sdk: ${(err as Error).message}. ` +
+            'Install it: pnpm --filter @ai-dialog/gateway add @anthropic-ai/claude-agent-sdk',
         );
       },
     );
@@ -121,7 +121,7 @@ function loadSdk(): Promise<SdkModule> {
   return sdkPromise;
 }
 
-// --- Нестрогие типы сообщений SDK (форма зависит от версии) ---
+// --- Loose SDK message types (the shape depends on the version) ---
 
 interface SdkMessage {
   type: string;

@@ -1,14 +1,13 @@
 import type { EndpointAdapter } from '@ai-dialog/shared';
 import type { ProjectConfig } from '../config.js';
 import { ClaudeCodeAdapter } from './claude-code.js';
-import { DashboardAdapter } from './dashboard.js';
-import { CaronoChannelAdapter } from './carono-channel.js';
+import { ExternalAdapter } from './external.js';
 import { OpencodeAdapter } from './opencode.js';
 
-/** Кэш адаптеров по проекту (чтобы переиспользовать историю/сессии). */
+/** Adapter cache by project (to reuse history/sessions). */
 const cache = new Map<string, EndpointAdapter>();
 
-/** Создаёт (или достаёт из кэша) адаптер для проекта. */
+/** Creates (or retrieves from cache) the adapter for a project. */
 export function getAdapter(project: string, config: ProjectConfig): EndpointAdapter {
   const existing = cache.get(project);
   if (existing) return existing;
@@ -22,13 +21,11 @@ function build(config: ProjectConfig): EndpointAdapter {
   switch (config.endpoint) {
     case 'claude-code':
       return new ClaudeCodeAdapter(config);
-    case 'dashboard':
-      return new DashboardAdapter();
-    case 'carono-channel':
-      return new CaronoChannelAdapter(config);
     case 'opencode':
       return new OpencodeAdapter(config);
+    case 'external':
+      return new ExternalAdapter(config);
     default:
-      throw new Error(`Неизвестный endpoint: ${(config as ProjectConfig).endpoint}`);
+      throw new Error(`Unknown endpoint: ${(config as ProjectConfig).endpoint}`);
   }
 }

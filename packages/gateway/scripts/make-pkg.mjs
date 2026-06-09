@@ -15,7 +15,7 @@ const src = JSON.parse(readFileSync(`${root}package.json`, 'utf8'));
 const out = `${root}pkg`;
 
 // Only the files reachable from the bin (cli.js → claude-code → context-prompt).
-// Everything else (index.js registry, dashboard/carono-channel adapters) stays out.
+// Everything else (the registry gateway and other adapters) stays out.
 rmSync(out, { recursive: true, force: true });
 mkdirSync(`${out}/adapters`, { recursive: true });
 copyFileSync(`${root}dist/cli.js`, `${out}/cli.js`);

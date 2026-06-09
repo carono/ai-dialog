@@ -2,20 +2,24 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-export type EndpointKind = 'claude-code' | 'opencode' | 'dashboard' | 'carono-channel';
+export type EndpointKind = 'claude-code' | 'opencode' | 'external';
 
 export interface ProjectConfig {
-  /** Какой эндпоинт обслуживает проект. */
+  /** Which endpoint serves the project. */
   endpoint: EndpointKind;
-  /** Абсолютный путь к репозиторию (для claude-code / opencode). */
+  /** Absolute path to the repository (for claude-code / opencode). */
   repoPath?: string;
-  /** id проекта в реестре дашборда (для endpoint carono-channel; опц., иначе резолв по repoPath). */
-  dashboardProjectId?: string;
-  /** Секретный токен проекта. Если задан — виджет обязан прислать его в hello. */
+  /**
+   * Absolute path to the external adapter (for the "external" endpoint). The module must
+   * default-export a factory `(config) => EndpointAdapter`. This keeps personal/
+   * project adapters outside this repository. See docs/INTEGRATION.md.
+   */
+  module?: string;
+  /** Project secret token. If set, the widget must send it in hello. */
   token?: string;
   /**
-   * Разрешить агенту изменять файлы. По умолчанию false — только чтение
-   * (read/grep/glob), чтобы случайный запрос с сайта не правил исходники.
+   * Allow the agent to modify files. Defaults to false — read-only
+   * (read/grep/glob), so a stray request from the site won't edit the sources.
    */
   allowWrite?: boolean;
 }

@@ -11,11 +11,11 @@ import { getAdapter } from './adapters/index.js';
 
 const config = loadConfig();
 
-/** Состояние одного WS-подключения. */
+/** State of a single WS connection. */
 interface ConnState {
   project?: string;
   authed: boolean;
-  /** Активные сессии: sessionId -> контроллер отмены текущего ответа. */
+  /** Active sessions: sessionId -> abort controller for the current response. */
   sessions: Map<string, AbortController>;
 }
 
@@ -76,8 +76,8 @@ async function handleMessage(
       }
       state.project = msg.project;
       state.authed = true;
-      // Продолжаем сохранённую клиентом сессию, если прислан валидный sessionId;
-      // иначе создаём новую. Так диалог переживает смену страницы и обрыв связи.
+      // Resume the client-saved session if a valid sessionId was sent;
+      // otherwise create a new one. This lets the dialog survive a page change and connection drop.
       const sessionId = sanitizeSessionId(msg.sessionId) ?? randomUUID();
       state.sessions.set(sessionId, new AbortController());
       send(ws, { type: 'ready', sessionId, endpoint: project.endpoint });
@@ -95,7 +95,7 @@ async function handleMessage(
         return;
       }
 
-      // Свежий контроллер на каждый ответ (старый прерываем).
+      // Fresh controller for each response (abort the old one).
       state.sessions.get(msg.sessionId)?.abort();
       const controller = new AbortController();
       state.sessions.set(msg.sessionId, controller);
@@ -132,7 +132,7 @@ function send(ws: WebSocket, msg: ServerMessage): void {
   if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(msg));
 }
 
-/** Принимает клиентский sessionId только если он безопасной формы. */
+/** Accepts the client sessionId only if it has a safe form. */
 function sanitizeSessionId(id: string | undefined): string | undefined {
   if (!id) return undefined;
   return /^[A-Za-z0-9_-]{8,128}$/.test(id) ? id : undefined;

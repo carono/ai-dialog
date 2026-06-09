@@ -1,41 +1,41 @@
 import type { PageContext } from './context.js';
 
 /**
- * Единое событие, которое любой эндпоинт-адаптер стримит наружу.
- * Шлюз ретранслирует эти события виджету как есть.
+ * A unified event that any endpoint adapter streams outward.
+ * The gateway relays these events to the widget as-is.
  */
 export type AgentEvent =
-  /** Прирост текста ответа (delta). */
+  /** Incremental response text (delta). */
   | { type: 'text'; text: string }
-  /** Видимый блок рассуждений (если эндпоинт их отдаёт). */
+  /** Visible reasoning block (if the endpoint provides one). */
   | { type: 'thinking'; text: string }
-  /** Агент вызвал инструмент (read/grep/bash/edit и т.п.). */
+  /** The agent invoked a tool (read/grep/bash/edit, etc.). */
   | { type: 'tool_use'; name: string; input?: unknown }
-  /** Результат инструмента (опционально, для индикации в UI). */
+  /** Tool result (optional, for UI indication). */
   | { type: 'tool_result'; name?: string; ok: boolean }
-  /** Ответ завершён нормально. */
+  /** Response completed normally. */
   | { type: 'done' }
-  /** Ошибка в ходе выполнения. */
+  /** Error during execution. */
   | { type: 'error'; message: string };
 
 export interface AdapterInput {
-  /** Идентификатор сессии (один диалог = одна сессия). */
+  /** Session identifier (one dialog = one session). */
   sessionId: string;
-  /** Текст сообщения пользователя. */
+  /** User message text. */
   message: string;
-  /** Контекст страницы на момент отправки. */
+  /** Page context at the moment of sending. */
   context: PageContext;
-  /** Сигнал отмены — шлюз дёргает abort при разрыве/команде stop. */
+  /** Cancellation signal — the gateway triggers abort on disconnect/stop command. */
   signal: AbortSignal;
 }
 
 /**
- * Контракт адаптера эндпоинта. Реализации: Claude Code (Agent SDK),
- * opencode (HTTP), наш дашборд (Claude API напрямую).
+ * Endpoint adapter contract. Implementations: Claude Code (Agent SDK),
+ * opencode (HTTP), our dashboard (Claude API directly).
  */
 export interface EndpointAdapter {
-  /** Человекочитаемое имя для логов. */
+  /** Human-readable name for logs. */
   readonly kind: string;
-  /** Стримит события ответа на одно сообщение пользователя. */
+  /** Streams response events for a single user message. */
   send(input: AdapterInput): AsyncIterable<AgentEvent>;
 }

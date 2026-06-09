@@ -1,41 +1,41 @@
 import type { AgentEvent } from './adapter.js';
 import type { PageContext } from './context.js';
 
-/** Версия протокола виджет ↔ шлюз. Поднимать при несовместимых изменениях. */
+/** Widget ↔ gateway protocol version. Bump on incompatible changes. */
 export const PROTOCOL_VERSION = 1;
 
-/** Сообщения, которые виджет шлёт шлюзу. */
+/** Messages the widget sends to the gateway. */
 export type ClientMessage =
-  /** Первое сообщение после открытия WS: представление виджета. */
+  /** First message after the WS opens: the widget's introduction. */
   | {
       type: 'hello';
       protocol: number;
-      /** Идентификатор проекта (data-project на скрипте). */
+      /** Project identifier (data-project on the script). */
       project: string;
-      /** Токен доступа проекта (если включена аутентификация). */
+      /** Project access token (if authentication is enabled). */
       token?: string;
       /**
-       * Сохранённый клиентом sessionId для продолжения диалога.
-       * Если задан и валиден — шлюз продолжит ту же сессию (resume),
-       * иначе создаст новую. Пусто/нет — новая сессия.
+       * Client-saved sessionId to continue the dialog.
+       * If set and valid — the gateway continues the same session (resume),
+       * otherwise it creates a new one. Empty/absent — a new session.
        */
       sessionId?: string;
     }
-  /** Сообщение пользователя в диалоге. */
+  /** A user message in the dialog. */
   | {
       type: 'user_message';
       sessionId: string;
       text: string;
       context: PageContext;
     }
-  /** Прервать текущий ответ. */
+  /** Abort the current response. */
   | { type: 'abort'; sessionId: string };
 
-/** Сообщения, которые шлюз шлёт виджету. */
+/** Messages the gateway sends to the widget. */
 export type ServerMessage =
-  /** Подтверждение hello: сессия создана, можно слать сообщения. */
+  /** hello acknowledgement: the session is created, messages can be sent. */
   | { type: 'ready'; sessionId: string; endpoint: string }
-  /** Очередное событие от эндпоинта. */
+  /** The next event from the endpoint. */
   | { type: 'event'; sessionId: string; event: AgentEvent }
-  /** Протокольная/инфраструктурная ошибка (не от агента). */
+  /** Protocol/infrastructure error (not from the agent). */
   | { type: 'error'; message: string };

@@ -2,9 +2,9 @@ import type { AdapterInput, AgentEvent, EndpointAdapter } from '@ai-dialog/share
 import type { ProjectConfig } from '../config.js';
 
 /**
- * Адаптер opencode (server-режим, HTTP API).
- * ЗАГЛУШКА: интеграция будет добавлена после Claude Code MVP.
- * Базовый URL берётся из OPENCODE_BASE_URL.
+ * The opencode adapter (server mode, HTTP API).
+ * STUB: the integration will be added after the Claude Code MVP.
+ * The base URL is taken from OPENCODE_BASE_URL.
  */
 export class OpencodeAdapter implements EndpointAdapter {
   readonly kind = 'opencode';
@@ -17,7 +17,7 @@ export class OpencodeAdapter implements EndpointAdapter {
     yield {
       type: 'error',
       message:
-        'opencode-адаптер ещё не реализован. На текущем этапе используйте endpoint "claude-code" или "dashboard".',
+        'opencode adapter is not implemented yet. Use endpoint "claude-code", or "external" for your own adapter.',
     };
   }
 }
