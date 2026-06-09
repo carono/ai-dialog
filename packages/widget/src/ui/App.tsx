@@ -36,6 +36,11 @@ interface Conn {
   port: number;
   project: string;
   token: string;
+  /**
+   * Signature of the page's data-* this choice was saved against. When the page
+   * config changes, the saved override is dropped and data-* are picked up again.
+   */
+  src?: string;
 }
 
 export function App({ project, gateway, token }: Props) {
@@ -110,19 +115,20 @@ export function App({ project, gateway, token }: Props) {
     return () => t.close();
   }, [eff.gateway, eff.project, eff.token, handleEvent]);
 
-  // Apply new connection parameters: save, reconnect,
-  // show the history of the selected project.
+  // Apply new connection parameters: stamp the page signature, overwrite storage,
+  // reconnect, and show the history of the selected project.
   const applyConn = useCallback(
     (next: Conn) => {
-      const effProject = effectiveConn(next, { project, token }).project;
-      saveConn(next);
-      setConn(next);
+      const stamped: Conn = { ...next, src: connSig({ project, gateway, token }) };
+      const effProject = effectiveConn(stamped, { project, token }).project;
+      saveConn(stamped);
+      setConn(stamped);
       setSettingsOpen(false);
       activeId.current = null;
       setBusy(false);
       setMessages(loadHistory(`aidlg.hist.${effProject}`));
     },
-    [project, token],
+    [project, gateway, token],
   );
 
   useEffect(() => {
@@ -256,6 +262,7 @@ export function App({ project, gateway, token }: Props) {
           {settingsOpen ? (
             <Settings
               conn={conn}
+              page={{ project, gateway, token }}
               onApply={applyConn}
               onClose={() => setSettingsOpen(false)}
             />
@@ -565,17 +572,19 @@ function Diagnostics({ reason, statusText, gateway, wsHost, project, token, deta
 
 interface SettingsProps {
   conn: Conn;
+  /** Page's data-* values, used to pre-fill the custom fields sensibly. */
+  page: { project: string; gateway: string; token?: string };
   onApply: (next: Conn) => void;
   onClose: () => void;
 }
 
 /** Panel for choosing the connection mode and manual parameters. */
-function Settings({ conn, onApply, onClose }: SettingsProps) {
+function Settings({ conn, page, onApply, onClose }: SettingsProps) {
   const [mode, setMode] = useState<Conn['mode']>(conn.mode);
-  const [gateway, setGateway] = useState(conn.gateway || '');
+  const [gateway, setGateway] = useState(conn.gateway || page.gateway || '');
   const [port, setPort] = useState(conn.port || DEFAULT_PORT);
-  const [project, setProject] = useState(conn.project || '');
-  const [token, setToken] = useState(conn.token || '');
+  const [project, setProject] = useState(conn.project || page.project || '');
+  const [token, setToken] = useState(conn.token || page.token || '');
 
   const apply = () =>
     onApply({
@@ -686,27 +695,13 @@ function effectiveConn(
   return { gateway: local, project: props.project, token: props.token };
 }
 
-/** Loads the saved mode; by default derives it from the data-* attributes. */
-function loadConn(props: { project: string; gateway: string; token?: string }): Conn {
-  try {
-    const raw = localStorage.getItem(CONN_KEY);
-    if (raw) {
-      const c = JSON.parse(raw) as Partial<Conn>;
-      if (c && (c.mode === 'claude-code' || c.mode === 'custom')) {
-        return {
-          mode: c.mode,
-          gateway: c.gateway || '',
-          port: Number(c.port) || DEFAULT_PORT,
-          project: c.project || '',
-          token: c.token || '',
-        };
-      }
-    }
-  } catch {
-    /* noop */
-  }
-  // No saved choice: if the page specified a non-local gateway, start
-  // in "custom" mode with those values, otherwise claude-code (local).
+/** Signature of the page's data-* config; when it changes, the saved override is dropped. */
+function connSig(props: { project: string; gateway: string; token?: string }): string {
+  return `${props.project}|${props.gateway}|${props.token ?? ''}`;
+}
+
+/** Builds the connection from the page's data-* (custom for a remote gateway, else local). */
+function deriveConn(props: { project: string; gateway: string; token?: string }, sig: string): Conn {
   const remote = props.gateway && props.gateway !== localGatewayUrl(DEFAULT_PORT);
   return {
     mode: remote ? 'custom' : 'claude-code',
@@ -714,7 +709,36 @@ function loadConn(props: { project: string; gateway: string; token?: string }): 
     port: DEFAULT_PORT,
     project: props.project,
     token: props.token || '',
+    src: sig,
   };
+}
+
+/**
+ * Loads the saved choice, but only if it was saved against the current page config.
+ * If the page's data-* changed (or nothing is saved), it re-derives from data-* — so
+ * updating the page config "just works" without clearing storage.
+ */
+function loadConn(props: { project: string; gateway: string; token?: string }): Conn {
+  const sig = connSig(props);
+  try {
+    const raw = localStorage.getItem(CONN_KEY);
+    if (raw) {
+      const c = JSON.parse(raw) as Partial<Conn>;
+      if (c && (c.mode === 'claude-code' || c.mode === 'custom') && c.src === sig) {
+        return {
+          mode: c.mode,
+          gateway: c.gateway || '',
+          port: Number(c.port) || DEFAULT_PORT,
+          project: c.project || '',
+          token: c.token || '',
+          src: sig,
+        };
+      }
+    }
+  } catch {
+    /* noop */
+  }
+  return deriveConn(props, sig);
 }
 
 function saveConn(conn: Conn): void {
