@@ -413,8 +413,8 @@ function Diagnostics({ reason, statusText, gateway, wsHost, project, token, deta
               <Copyable code={health} />
             </li>
             <li>
-              <code>{project}</code> — это <code>data-project</code> на скрипте (в Yii2 — опция{' '}
-              <code>project</code> модуля). Ключ в projects.json должен совпадать.
+              <code>{project}</code> — это значение <code>data-project</code> на теге скрипта
+              виджета. Ключ в projects.json должен совпадать.
             </li>
           </ol>
         </>
@@ -428,8 +428,8 @@ function Diagnostics({ reason, statusText, gateway, wsHost, project, token, deta
           </p>
           <ol>
             <li>
-              Укажите токен на стороне сайта — атрибут <code>data-token</code> (в Yii2 — опция{' '}
-              <code>token</code> модуля <code>aiDialog</code>):
+              Укажите токен на стороне сайта — атрибут <code>data-token</code> на теге скрипта
+              виджета:
               <Copyable code={scriptTag} />
             </li>
             <li>

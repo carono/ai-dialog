@@ -20,7 +20,7 @@ const pkg = {
   unpkg: 'widget.js',
   jsdelivr: 'widget.js',
   files: ['widget.js'],
-  keywords: ['ai', 'widget', 'chat', 'claude', 'assistant', 'npm-asset', 'yii2'],
+  keywords: ['ai', 'widget', 'chat', 'claude', 'assistant', 'npm-asset'],
 };
 
 writeFileSync(`${root}dist/package.json`, `${JSON.stringify(pkg, null, 2)}\n`);
