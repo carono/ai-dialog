@@ -36,8 +36,8 @@ function loadProjects(): ProjectsConfig {
     const raw = readFileSync(path, 'utf8');
     return JSON.parse(raw) as ProjectsConfig;
   } catch (err) {
-    console.warn(`[config] не удалось прочитать реестр проектов (${path}):`, (err as Error).message);
-    console.warn('[config] стартуем с пустым реестром — добавьте projects.json');
+    console.warn(`[config] failed to read the project registry (${path}):`, (err as Error).message);
+    console.warn('[config] starting with an empty registry — add projects.json');
     return {};
   }
 }

@@ -4,9 +4,15 @@
   "private": true,
   "type": "module",
   "main": "./dist/index.js",
+  "bin": {
+    "ai-dialog-gateway": "./dist/cli.js"
+  },
   "scripts": {
     "dev": "node --env-file=../../.env --import tsx --watch src/index.ts",
     "start": "node --env-file=../../.env dist/index.js",
+    "connector": "node dist/cli.js",
+    "connector:dev": "node --import tsx src/cli.ts",
+    "pack:publish": "tsc -p tsconfig.json && node scripts/make-pkg.mjs",
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },

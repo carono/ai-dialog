@@ -39,7 +39,7 @@ wss.on('connection', (ws) => {
     try {
       msg = JSON.parse(data.toString()) as ClientMessage;
     } catch {
-      send(ws, { type: 'error', message: 'Невалидный JSON' });
+      send(ws, { type: 'error', message: 'Invalid JSON' });
       return;
     }
     handleMessage(ws, state, msg, config).catch((err) => {
@@ -62,16 +62,16 @@ async function handleMessage(
   switch (msg.type) {
     case 'hello': {
       if (msg.protocol !== PROTOCOL_VERSION) {
-        send(ws, { type: 'error', message: `Несовместимая версия протокола (нужна ${PROTOCOL_VERSION})` });
+        send(ws, { type: 'error', message: `Incompatible protocol version (need ${PROTOCOL_VERSION})` });
         return;
       }
       const project = cfg.projects[msg.project];
       if (!project) {
-        send(ws, { type: 'error', message: `Неизвестный проект: ${msg.project}` });
+        send(ws, { type: 'error', message: `Unknown project: ${msg.project}` });
         return;
       }
       if (project.token && project.token !== msg.token) {
-        send(ws, { type: 'error', message: 'Неверный токен проекта' });
+        send(ws, { type: 'error', message: 'Invalid project token' });
         return;
       }
       state.project = msg.project;
@@ -86,12 +86,12 @@ async function handleMessage(
 
     case 'user_message': {
       if (!state.authed || !state.project) {
-        send(ws, { type: 'error', message: 'Сначала отправьте hello' });
+        send(ws, { type: 'error', message: 'Send hello first' });
         return;
       }
       const project = cfg.projects[state.project];
       if (!project) {
-        send(ws, { type: 'error', message: 'Проект больше недоступен' });
+        send(ws, { type: 'error', message: 'Project is no longer available' });
         return;
       }
 
@@ -139,6 +139,6 @@ function sanitizeSessionId(id: string | undefined): string | undefined {
 }
 
 http.listen(config.port, config.host, () => {
-  console.log(`[gateway] слушает ws://${config.host}:${config.port}`);
-  console.log(`[gateway] проекты: ${Object.keys(config.projects).join(', ') || '(пусто)'}`);
+  console.log(`[gateway] listening on ws://${config.host}:${config.port}`);
+  console.log(`[gateway] projects: ${Object.keys(config.projects).join(', ') || '(none)'}`);
 });
