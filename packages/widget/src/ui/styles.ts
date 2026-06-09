@@ -33,10 +33,35 @@ export const STYLES = `
 .header .clear:hover { background: rgba(255,255,255,.22); }
 .header .close { background: none; border: none; color: #fff; cursor: pointer; font-size: 18px; }
 
-.diag { background: #fff8e1; border-bottom: 1px solid #ffe0a3; color: #664d03; padding: 10px 12px; font-size: 12px; line-height: 1.5; }
+.diag { background: #fff8e1; border-bottom: 1px solid #ffe0a3; color: #664d03; padding: 11px 13px; font-size: 12px; line-height: 1.5; max-height: 60%; overflow-y: auto; }
 .diag code { background: rgba(0,0,0,.07); padding: 1px 5px; border-radius: 4px; font-family: ui-monospace, monospace; word-break: break-all; }
-.diag-row { margin-top: 4px; }
-.diag-hint { margin-top: 7px; color: #7a6a3a; }
+.diag-title { font-weight: 700; font-size: 13px; margin-bottom: 6px; }
+.diag p { margin: 0 0 8px; }
+.diag ol { margin: 6px 0 8px; padding-left: 18px; }
+.diag li { margin-bottom: 7px; }
+.diag-note { color: #7a6a3a; font-style: italic; }
+.diag-code { position: relative; margin: 5px 0 2px; }
+.diag-code pre {
+  margin: 0; padding: 7px 30px 7px 9px; background: #2b2417; color: #f0e6d2;
+  border-radius: 6px; font-family: ui-monospace, monospace; font-size: 11px;
+  line-height: 1.45; white-space: pre; overflow-x: auto;
+}
+.diag-copy {
+  position: absolute; top: 5px; right: 5px; border: none; cursor: pointer;
+  background: rgba(255,255,255,.14); color: #f0e6d2; border-radius: 5px;
+  font-size: 12px; line-height: 1; padding: 4px 6px;
+}
+.diag-copy:hover { background: rgba(255,255,255,.28); }
+.diag-vals { margin-top: 8px; padding-top: 8px; border-top: 1px solid #ffe0a3; display: flex; flex-wrap: wrap; gap: 4px 12px; }
+.diag-vals code { word-break: break-all; }
+.diag-actions { margin-top: 9px; display: flex; align-items: center; gap: 12px; }
+.diag-retry {
+  border: 1px solid #e0b85c; background: #ffefc2; color: #664d03; cursor: pointer;
+  border-radius: 7px; font-size: 12px; padding: 5px 11px; font-weight: 500;
+}
+.diag-retry:hover { background: #ffe6a0; }
+.diag-docs { color: #9a5b00; font-weight: 500; text-decoration: none; }
+.diag-docs:hover { text-decoration: underline; }
 
 .body { flex: 1; overflow-y: auto; padding: 14px; background: #f6f8fa; }
 

@@ -19,6 +19,8 @@ export class Transport {
   private sessionId?: string;
   private reconnectTimer?: number;
   private closedByUser = false;
+  /** Прошло ли рукопожатие (получен `ready`). До этого серверные ошибки — настроечные. */
+  private ready = false;
   private readonly sidKey: string;
 
   constructor(
@@ -33,6 +35,7 @@ export class Transport {
 
   connect(): void {
     this.closedByUser = false;
+    this.ready = false;
     this.handlers.onStatus('connecting');
     const ws = new WebSocket(this.gateway);
     this.ws = ws;
@@ -89,6 +92,17 @@ export class Transport {
     this.ws?.close();
   }
 
+  /** Ручная переподключка (кнопка «Проверить снова» в диагностике). */
+  retry(): void {
+    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    try {
+      this.ws?.close();
+    } catch {
+      /* noop */
+    }
+    this.connect();
+  }
+
   /** Начать новую сессию: забыть сохранённый sessionId и запросить новый. */
   reset(): void {
     this.sessionId = undefined;
@@ -108,6 +122,7 @@ export class Transport {
   private handleServerMessage(msg: ServerMessage): void {
     switch (msg.type) {
       case 'ready':
+        this.ready = true;
         this.sessionId = msg.sessionId;
         writeStored(this.sidKey, msg.sessionId);
         this.handlers.onStatus('ready', msg.endpoint);
@@ -116,7 +131,14 @@ export class Transport {
         this.handlers.onEvent(msg.event);
         break;
       case 'error':
-        this.handlers.onEvent({ type: 'error', message: msg.message });
+        // До рукопожатия серверная ошибка (неизвестный проект, неверный токен,
+        // версия протокола) — это проблема настройки: показываем в диагностике,
+        // а не теряем в пустом диалоге. После ready — это ошибка ответа агента.
+        if (this.ready) {
+          this.handlers.onEvent({ type: 'error', message: msg.message });
+        } else {
+          this.handlers.onStatus('error', msg.message);
+        }
         break;
     }
   }

@@ -211,24 +211,16 @@ export function App({ project, gateway, token }: Props) {
           </div>
 
           {status !== 'ready' && (
-            <div class="diag">
-              <b>Нет связи со шлюзом</b> — {statusText}
-              <div class="diag-row">
-                адрес: <code>{gateway}</code>
-              </div>
-              <div class="diag-row">
-                проект: <code>{project}</code>
-              </div>
-              {diag && (
-                <div class="diag-row">
-                  детали: <code>{diag}</code>
-                </div>
-              )}
-              <div class="diag-hint">
-                Проверьте: 1) запущен ли шлюз; 2) проксируется ли <code>{wsHost}</code> на шлюз
-                с WebSocket-upgrade (wss); 3) резолвится ли домен в браузере.
-              </div>
-            </div>
+            <Diagnostics
+              reason={classifyDiag(status, diag)}
+              statusText={statusText}
+              gateway={gateway}
+              wsHost={wsHost}
+              project={project}
+              token={token}
+              detail={diag}
+              onRetry={() => transportRef.current?.retry()}
+            />
           )}
 
           <div class="body" ref={bodyRef}>
@@ -307,6 +299,213 @@ export function App({ project, gateway, token }: Props) {
         {open ? '×' : '💬'}
       </button>
     </>
+  );
+}
+
+// --- Диагностика и самонастройка ---
+
+/** Полная инструкция по развёртыванию шлюза и подключению (для человека и ИИ-агента). */
+const DOCS_URL = 'https://github.com/carono/ai-dialog/blob/master/docs/INTEGRATION.md';
+
+type DiagReason = 'connecting' | 'no-gateway' | 'unknown-project' | 'bad-token' | 'protocol' | 'other';
+
+/** Определяет причину по статусу транспорта и тексту серверной ошибки. */
+function classifyDiag(status: TransportStatus, diag: string): DiagReason {
+  const d = diag.toLowerCase();
+  if (d.includes('неизвестный проект')) return 'unknown-project';
+  if (d.includes('токен')) return 'bad-token';
+  if (d.includes('протокол')) return 'protocol';
+  if (status === 'connecting') return 'connecting';
+  if (diag) return 'other';
+  return 'no-gateway';
+}
+
+interface DiagProps {
+  reason: DiagReason;
+  statusText: string;
+  gateway: string;
+  wsHost: string;
+  project: string;
+  token?: string;
+  detail: string;
+  onRetry: () => void;
+}
+
+/** Блок «что не так и как починить» — основной онбординг-экран виджета. */
+function Diagnostics({ reason, statusText, gateway, wsHost, project, token, detail, onRetry }: DiagProps) {
+  const tokenVal = token && token.length ? token : 'ПРИДУМАЙТЕ-СЕКРЕТ';
+  const health = 'curl -s http://127.0.0.1:8787/health';
+  const projectsJson =
+    `"${project}": {\n` +
+    '  "endpoint": "claude-code",\n' +
+    '  "repoPath": "/абсолютный/путь/к/репозиторию",\n' +
+    `  "token": "${tokenVal}",\n` +
+    '  "allowWrite": false\n' +
+    '}';
+  const scriptTag =
+    '<script src=".../widget.js"\n' +
+    `  data-project="${project}"\n` +
+    `  data-gateway="${gateway}"\n` +
+    `  data-token="${tokenVal}"></script>`;
+
+  const title =
+    reason === 'connecting'
+      ? 'Подключаюсь к шлюзу…'
+      : reason === 'unknown-project'
+        ? 'Проект не заведён на шлюзе'
+        : reason === 'bad-token'
+          ? token
+            ? 'Неверный токен проекта'
+            : 'Не указан токен проекта'
+          : reason === 'protocol'
+            ? 'Версии виджета и шлюза не совпадают'
+            : reason === 'other'
+              ? 'Не удалось подключиться'
+              : 'Шлюз недоступен';
+
+  return (
+    <div class="diag">
+      <div class="diag-title">{title}</div>
+
+      {reason === 'connecting' && (
+        <p>
+          Устанавливаю WebSocket-соединение с <code>{wsHost}</code>. Если надолго зависло — шлюз,
+          скорее всего, недоступен (что это и как проверить — см. ниже).
+        </p>
+      )}
+
+      {reason === 'no-gateway' && (
+        <>
+          <p>
+            Виджет — это только клиент. Чтобы он отвечал, нужен общий сервис-<b>шлюз</b>: он
+            принимает соединения виджетов и по паре <code>project</code>+<code>token</code>{' '}
+            направляет запрос в AI-движок с доступом к коду проекта. Один шлюз обслуживает все
+            проекты.
+          </p>
+          <ol>
+            <li>
+              Проверьте, что шлюз запущен (на его машине) — ждём <code>{'{"ok":true,…}'}</code>:
+              <Copyable code={health} />
+            </li>
+            <li>
+              Браузер ходит по <code>wss</code>, поэтому <code>{wsHost}</code> должен проксироваться
+              на шлюз с WebSocket-upgrade и резолвиться в браузере.
+            </li>
+            <li>Если шлюзом управляете не вы — попросите владельца поднять его (инструкция ниже).</li>
+          </ol>
+        </>
+      )}
+
+      {reason === 'unknown-project' && (
+        <>
+          <p>
+            Шлюз отвечает (значит, он работает и доступен), но проекта <code>{project}</code> нет в
+            его реестре <code>projects.json</code>.
+          </p>
+          <ol>
+            <li>
+              Добавьте запись в <code>projects.json</code> шлюза:
+              <Copyable code={projectsJson} />
+            </li>
+            <li>
+              Перезапустите шлюз и проверьте, что проект появился (в <code>"projects"</code> должен
+              быть <code>{project}</code>):
+              <Copyable code={health} />
+            </li>
+            <li>
+              <code>{project}</code> — это <code>data-project</code> на скрипте (в Yii2 — опция{' '}
+              <code>project</code> модуля). Ключ в projects.json должен совпадать.
+            </li>
+          </ol>
+        </>
+      )}
+
+      {reason === 'bad-token' && (
+        <>
+          <p>
+            У проекта <code>{project}</code> на шлюзе задан токен, а виджет прислал{' '}
+            {token ? 'другой' : 'пустой'}.
+          </p>
+          <ol>
+            <li>
+              Укажите токен на стороне сайта — атрибут <code>data-token</code> (в Yii2 — опция{' '}
+              <code>token</code> модуля <code>aiDialog</code>):
+              <Copyable code={scriptTag} />
+            </li>
+            <li>
+              Он должен совпадать с полем <code>token</code> этого проекта в{' '}
+              <code>projects.json</code> шлюза.
+            </li>
+            <li>После правки перезагрузите страницу — токен читается из тега при загрузке.</li>
+          </ol>
+          <p class="diag-note">
+            Токен — простая защита: чтобы чужой сайт не дёргал ваш репозиторий через шлюз.
+          </p>
+        </>
+      )}
+
+      {reason === 'protocol' && (
+        <p>
+          {detail || 'Несовместимая версия протокола.'} Обновите виджет (npm-asset{' '}
+          <code>carono-ai-dialog-widget</code>) и шлюз до совместимых версий.
+        </p>
+      )}
+
+      {reason === 'other' && <p>{detail}</p>}
+
+      <div class="diag-vals">
+        <span>
+          статус: <code>{statusText}</code>
+        </span>
+        <span>
+          адрес: <code>{gateway}</code>
+        </span>
+        <span>
+          проект: <code>{project}</code>
+        </span>
+        <span>
+          токен: <code>{token && token.length ? 'задан' : 'не задан'}</code>
+        </span>
+        {detail && reason !== 'other' && reason !== 'protocol' && (
+          <span>
+            детали: <code>{detail}</code>
+          </span>
+        )}
+      </div>
+
+      <div class="diag-actions">
+        <button class="diag-retry" onClick={onRetry}>
+          ↻ Проверить снова
+        </button>
+        <a class="diag-docs" href={DOCS_URL} target="_blank" rel="noopener noreferrer">
+          Инструкция по настройке →
+        </a>
+      </div>
+    </div>
+  );
+}
+
+/** Блок кода с кнопкой «копировать». */
+function Copyable({ code }: { code: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <div class="diag-code">
+      <pre>{code}</pre>
+      <button
+        class="diag-copy"
+        onClick={() => {
+          try {
+            navigator.clipboard?.writeText(code);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 1500);
+          } catch {
+            /* noop */
+          }
+        }}
+      >
+        {copied ? '✓' : '⧉'}
+      </button>
+    </div>
   );
 }
 
