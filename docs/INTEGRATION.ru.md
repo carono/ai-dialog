@@ -120,48 +120,46 @@ interface AdapterInput {
 
 ### 2.2. Написать адаптер
 
-`packages/gateway/src/adapters/my-endpoint.ts`:
+Отдельный ES-модуль (`.mjs` или `.js`) **вне этого репозитория**. Экспортируйте по умолчанию
+фабрику `(projectConfig) => adapter`:
 
-```ts
-import type { AdapterInput, AgentEvent, EndpointAdapter } from '@ai-dialog/shared';
-import type { ProjectConfig } from '../config.js';
-
-export class MyEndpointAdapter implements EndpointAdapter {
-  readonly kind = 'my-endpoint';
-
-  constructor(private readonly project: ProjectConfig) {}
-
-  async *send(input: AdapterInput): AsyncIterable<AgentEvent> {
-    try {
-      // обратитесь к своему бэкенду, используя input.message и input.context,
-      // и стримьте ответ кусками:
-      for await (const chunk of callMyBackend(input, this.project)) {
-        if (input.signal.aborted) return;
-        yield { type: 'text', text: chunk };
+```js
+// my-adapter.mjs — самодостаточный, без импортов из этого репозитория
+export default function createAdapter(project) {
+  return {
+    kind: 'my-endpoint',
+    async *send(input) {
+      try {
+        // обратитесь к своему бэкенду, используя input.message и input.context:
+        for await (const chunk of callMyBackend(input, project)) {
+          if (input.signal.aborted) return;
+          yield { type: 'text', text: chunk };
+        }
+        yield { type: 'done' };
+      } catch (err) {
+        yield { type: 'error', message: err.message };
       }
-      yield { type: 'done' };
-    } catch (err) {
-      yield { type: 'error', message: (err as Error).message };
-    }
-  }
+    },
+  };
 }
 ```
 
-Нужны свои поля в конфиге проекта (например, URL или ключ) — добавьте их в `ProjectConfig`.
+`project` — запись проекта из `projects.json` (любые доп. поля, которые вы туда положите,
+доступны). Секреты читайте из `process.env`. Пишете на TypeScript? Скомпилируйте в `.js` и
+укажите путь к результату.
 
-### 2.3. Зарегистрировать
+### 2.3. Указать проекту путь к адаптеру
 
-- Добавьте свой `kind` в тип `EndpointKind` в `packages/gateway/src/config.ts`.
-- Подключите ветку в `build()` (`packages/gateway/src/adapters/index.ts`):
+В `projects.json` используйте эндпоинт `external` и абсолютный путь к модулю:
 
-  ```ts
-  case 'my-endpoint':
-    return new MyEndpointAdapter(config);
-  ```
+```json
+"myproject": {
+  "endpoint": "external",
+  "module": "/absolute/path/to/my-adapter.mjs",
+  "token": "a-secret"
+}
+```
 
-### 2.4. Использовать
-
-В `projects.json` укажите проекту `"endpoint": "my-endpoint"` (плюс ваши поля конфига) и
-перезапустите шлюз.
-
-> Готовые адаптеры в `packages/gateway/src/adapters/` можно использовать как образец реализации.
+Перезапустите шлюз. Модуль импортируется лениво на первом запросе. Поскольку адаптер лежит вне
+репозитория, он (и его секреты) не попадают в кодовую базу — то, что нужно для приватных или
+проектных интеграций.

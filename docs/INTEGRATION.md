@@ -122,48 +122,46 @@ cancellation.
 
 ### 2.2. Write the adapter
 
-`packages/gateway/src/adapters/my-endpoint.ts`:
+A standalone ES module (`.mjs` or `.js`) **anywhere outside this repo**. Default-export a factory
+`(projectConfig) => adapter`:
 
-```ts
-import type { AdapterInput, AgentEvent, EndpointAdapter } from '@ai-dialog/shared';
-import type { ProjectConfig } from '../config.js';
-
-export class MyEndpointAdapter implements EndpointAdapter {
-  readonly kind = 'my-endpoint';
-
-  constructor(private readonly project: ProjectConfig) {}
-
-  async *send(input: AdapterInput): AsyncIterable<AgentEvent> {
-    try {
-      // call your backend using input.message and input.context,
-      // and stream the answer in chunks:
-      for await (const chunk of callMyBackend(input, this.project)) {
-        if (input.signal.aborted) return;
-        yield { type: 'text', text: chunk };
+```js
+// my-adapter.mjs — self-contained, no imports from this repo
+export default function createAdapter(project) {
+  return {
+    kind: 'my-endpoint',
+    async *send(input) {
+      try {
+        // call your backend using input.message and input.context, stream chunks:
+        for await (const chunk of callMyBackend(input, project)) {
+          if (input.signal.aborted) return;
+          yield { type: 'text', text: chunk };
+        }
+        yield { type: 'done' };
+      } catch (err) {
+        yield { type: 'error', message: err.message };
       }
-      yield { type: 'done' };
-    } catch (err) {
-      yield { type: 'error', message: (err as Error).message };
-    }
-  }
+    },
+  };
 }
 ```
 
-Need your own fields in the project config (a URL or key, say) — add them to `ProjectConfig`.
+`project` is the project's entry from `projects.json` (any extra fields you put there are
+available). Read secrets from `process.env`. Writing in TypeScript? Compile it to `.js` and point
+to the output.
 
-### 2.3. Register it
+### 2.3. Point a project at it
 
-- Add your `kind` to the `EndpointKind` type in `packages/gateway/src/config.ts`.
-- Wire a branch into `build()` (`packages/gateway/src/adapters/index.ts`):
+In `projects.json` use the `external` endpoint and the absolute path to your module:
 
-  ```ts
-  case 'my-endpoint':
-    return new MyEndpointAdapter(config);
-  ```
+```json
+"myproject": {
+  "endpoint": "external",
+  "module": "/absolute/path/to/my-adapter.mjs",
+  "token": "a-secret"
+}
+```
 
-### 2.4. Use it
-
-In `projects.json` set the project's `"endpoint": "my-endpoint"` (plus your config fields) and
-restart the gateway.
-
-> The existing adapters in `packages/gateway/src/adapters/` can serve as a reference implementation.
+Restart the gateway. The module is imported lazily on the first request. Because the adapter lives
+outside the repo, it (and its secrets) never enter this codebase — ideal for private or
+project-specific integrations.
