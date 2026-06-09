@@ -1,99 +1,94 @@
 # ai-dialog
 
-Встраиваемый виджет диалога с AI для любого сайта. При запросе в контекст уходит
-текущая страница (URL, маршрут, заголовок, видимый текст, выделение, подсказки о фреймворке,
-ошибки страницы). Конечная точка, которая отвечает, **настраивается на уровне проекта**:
-
-- **`claude-code`** — сессия Claude Code через `@anthropic-ai/claude-agent-sdk` с доступом
-  к репозиторию. Агент сам резолвит маршрут страницы в файлы исходников. *(MVP)*
-- **`dashboard`** — прямой вызов Claude API (без агента-кодера), отвечает по содержимому страницы.
-- **`opencode`** — заглушка, интеграция позже.
+Встраиваемый виджет диалога с AI для любого сайта. При запросе в контекст уходит текущая страница
+(URL, маршрут, заголовок, видимый текст, выделение, подсказки о фреймворке, ошибки страницы), а
+отвечает AI‑бэкенд с доступом к репозиторию — сам резолвит страницу в файлы исходников.
 
 > 🇬🇧 English documentation: [`../README.md`](../README.md).
 
 ## Архитектура
 
+Браузер не может сам запустить Claude Code, поэтому маленький локальный **коннектор** отдаёт его
+по WebSocket (это ровно тот inbound‑слой, который описан в официальном гайде Anthropic
+[Agent SDK hosting](https://code.claude.com/docs/en/agent-sdk/hosting): твой процесс держит
+WS‑порт и вызывает SDK внутри):
+
 ```
-Виджет (Preact, Shadow DOM)  ──WS──►  Шлюз (Node, ws)  ──адаптер──►  Эндпоинт
-  сбор контекста страницы              сессии, auth, роутинг          Claude Code / dashboard / opencode
+Виджет (браузер) ──WebSocket──► Коннектор (Node) ──► Claude Code (Agent SDK, cwd = твой репозиторий)
+  сбор контекста страницы        auth + контекст→промпт + стриминг
 ```
 
 Монорепо (pnpm workspaces):
 
+- `packages/widget` — встраиваемый IIFE‑бандл (`widget.js`).
+- `packages/gateway` — коннектор: WebSocket‑сервер + адаптер Claude Code.
 - `packages/shared` — общий протокол (типы сообщений и интерфейс адаптера).
-- `packages/gateway` — Node-шлюз: WebSocket, реестр проектов, адаптеры эндпоинтов.
-- `packages/widget` — встраиваемый IIFE-бандл (`widget.js`).
 
-## Быстрый старт
+## Запуск коннектора
 
-```bash
-# 1. Зависимости
-pnpm install
-
-# 2. Окружение
-cp .env.example .env            # при необходимости пропишите ANTHROPIC_API_KEY
-
-# 3. Реестр проектов
-cp packages/gateway/projects.example.json packages/gateway/projects.json
-# отредактируйте: endpoint, repoPath (для claude-code), token
-
-# 4. Собрать общие типы (нужно перед dev)
-pnpm build:shared
-
-# 5. Запустить шлюз
-pnpm dev:gateway                # ws://127.0.0.1:8787, GET /health
-
-# 6. Разработка виджета (dev-harness)
-pnpm dev:widget                 # откроет страницу с виджетом, подключённым к шлюзу
-```
-
-### Сборка и подключение на реальный сайт
+У тебя на машине есть Claude Code и репозиторий. Одна команда:
 
 ```bash
-pnpm --filter @ai-dialog/widget build   # → packages/widget/dist/widget.js
+npx carono-ai-dialog-connector --repo /path/to/your/repo --token a-secret
+# → listening on ws://127.0.0.1:8787
 ```
+
+Из исходников (до публикации): `node packages/gateway/dist/cli.js --repo … --token …`
+(сначала `pnpm --filter @ai-dialog/gateway build`).
+
+Опции:
+
+| Флаг | По умолчанию | Назначение |
+|---|---|---|
+| `--repo <path>` | — (обязателен) | корень репозитория, в котором работает агент (`cwd`) |
+| `--token <secret>` | — | общий секрет; виджет обязан прислать тот же `data-token` |
+| `--project <id>` | `default` | id проекта, который виджет шлёт в `data-project` |
+| `--host <host>` | `127.0.0.1` | адрес привязки |
+| `--port <port>` | `8787` | порт |
+| `--allow-write` | выкл | разрешить агенту править файлы (по умолчанию — только чтение) |
+
+Аутентификация: коннектор использует уже выполненный на машине вход Claude Code (подписка/OAuth).
+Для этого пути **не** задавай `ANTHROPIC_API_KEY` — он перебивает OAuth‑сессию.
+
+## Подключение виджета
+
+Положи бандл на страницу и укажи на коннектор:
 
 ```html
 <script
   src="https://your-cdn.example/widget.js"
-  data-project="myapp"
-  data-gateway="wss://your-gateway.example"
-  data-token="project-secret"
+  data-project="default"
+  data-gateway="ws://localhost:8787"
+  data-token="a-secret"
 ></script>
 ```
 
-## Подключение бэкенда
+`data-project` / `data-token` должны совпасть с `--project` / `--token` коннектора. Для удалённого
+коннектора терминируй TLS перед ним и используй `wss://`. (Для Yii2 есть отдельный пакет, который
+вставляет этот тег из конфига — см. `carono/yii2-ai-dialog`.)
 
-Подключение бэкенда к шлюзу (Claude Code и собственные адаптеры) описано в
-[`INTEGRATION.ru.md`](INTEGRATION.ru.md). Коротко: добавить запись проекта в `projects.json`
-шлюза + перезапустить шлюз, затем подключить виджет на сайте тегом `<script>` с `data-*`
-(см. выше).
+## Продвинутое: несколько проектов и свои бэкенды
 
-## Конфиг проектов (`packages/gateway/projects.json`)
+Коннектор обслуживает один репозиторий. Для нескольких проектов за одним процессом или бэкенда
+помимо Claude Code (свой адаптер) — реестровый gateway и контракт адаптера, см.
+[`INTEGRATION.ru.md`](INTEGRATION.ru.md).
 
-```json
-{
-  "myapp": {
-    "endpoint": "claude-code",
-    "repoPath": "/absolute/path/to/your/repo",
-    "token": "a-secret",
-    "allowWrite": false
-  }
-}
+## Разработка в монорепо
+
+```bash
+pnpm install
+pnpm build:shared                 # сначала собрать общие типы
+pnpm --filter @ai-dialog/gateway connector:dev -- --repo /path/to/repo --token a-secret
+pnpm dev:widget                   # dev-страница с виджетом
 ```
-
-- `token` — если задан, виджет обязан прислать его (`data-token`).
-- `allowWrite` — по умолчанию `false`: агенту доступны только чтение/поиск
-  (Read/Grep/Glob/Bash), чтобы запрос с сайта не правил исходники.
 
 ## Статус MVP
 
 - [x] Контракт протокола (`shared`)
-- [x] Шлюз: WebSocket, реестр проектов, отмена, реконнект
-- [x] Адаптеры: `claude-code` (Agent SDK), `dashboard` (Claude API)
-- [x] Виджет: чат в Shadow DOM, сбор контекста, стриминг
-- [x] Демо-сайт
+- [x] Коннектор: WebSocket + адаптер Claude Code, один репозиторий через флаги
+- [x] Виджет: чат в Shadow DOM, сбор контекста, стриминг, самодиагностика
+- [x] Переключение режима в виджете (локальный коннектор / произвольный шлюз)
+- [ ] Опубликовать `carono-ai-dialog-connector` (npx)
 - [ ] `opencode`-адаптер
 - [ ] Аутентификация поверх токена (origin allowlist, rate limit)
-- [ ] Source-map резолв компонент→файл на стороне виджета
 - [ ] Индикация tool_result, рендер markdown

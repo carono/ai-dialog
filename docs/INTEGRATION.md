@@ -2,6 +2,11 @@
 
 > 🇷🇺 Версия на русском: [`INTEGRATION.ru.md`](INTEGRATION.ru.md).
 
+> **Just one repository with Claude Code?** You don't need any of this — run the connector with a
+> single command (`npx carono-ai-dialog-connector --repo … --token …`), see [Run the connector](../README.md#run-the-connector).
+> This document is the **advanced** path: serving several projects from one process, or plugging in
+> a backend other than Claude Code.
+
 The gateway (`packages/gateway`) accepts widget connections and, for each project, routes messages
 to an **endpoint adapter** — the code that actually "thinks" and streams the answer. Out of the box
 there is the `claude-code` adapter: it answers via Claude Code with access to the project's
