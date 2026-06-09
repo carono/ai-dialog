@@ -13,13 +13,15 @@ export interface TransportHandlers {
   onEvent(event: AgentEvent): void;
 }
 
-/** WS-клиент виджета: соединение со шлюзом, hello-рукопожатие, стрим событий. */
+/** Widget WS client: connection to the gateway, hello handshake, event stream. */
 export class Transport {
   private ws?: WebSocket;
   private sessionId?: string;
   private reconnectTimer?: number;
+  /** Timer waiting for the socket to open: a stuck connect → «Gateway unavailable». */
+  private connectTimer?: number;
   private closedByUser = false;
-  /** Прошло ли рукопожатие (получен `ready`). До этого серверные ошибки — настроечные. */
+  /** Whether the handshake completed (`ready` received). Before that, server errors are configuration errors. */
   private ready = false;
   private readonly sidKey: string;
 
@@ -40,13 +42,27 @@ export class Transport {
     const ws = new WebSocket(this.gateway);
     this.ws = ws;
 
+    // If the socket didn't open within the allotted time, don't hang in «connecting»,
+    // but report an error (diagnostics will show the connector isn't running).
+    this.connectTimer = window.setTimeout(() => {
+      if (ws.readyState !== WebSocket.OPEN) {
+        this.handlers.onStatus('error', `couldn't open WebSocket to ${this.gateway}`);
+        try {
+          ws.close();
+        } catch {
+          /* noop */
+        }
+      }
+    }, 8000);
+
     ws.addEventListener('open', () => {
+      if (this.connectTimer) clearTimeout(this.connectTimer);
       this.sendRaw({
         type: 'hello',
         protocol: PROTOCOL_VERSION,
         project: this.project,
         token: this.token,
-        // Переиспользуем сохранённый sessionId — продолжаем диалог.
+        // Reuse the stored sessionId — continue the conversation.
         sessionId: this.sessionId,
       });
     });
@@ -62,24 +78,26 @@ export class Transport {
     });
 
     ws.addEventListener('close', (e) => {
+      if (this.connectTimer) clearTimeout(this.connectTimer);
       const detail = `closed (code ${e.code}${e.reason ? `: ${e.reason}` : ''})`;
       this.handlers.onStatus('closed', detail);
       if (!this.closedByUser) this.scheduleReconnect();
     });
 
     ws.addEventListener('error', () => {
+      if (this.connectTimer) clearTimeout(this.connectTimer);
       this.handlers.onStatus('error', `couldn't open WebSocket to ${this.gateway}`);
     });
   }
 
-  /** Отправляет сообщение пользователя со снимком контекста. */
+  /** Sends the user's message together with a context snapshot. */
   sendMessage(text: string, context: PageContext): boolean {
     if (!this.sessionId || this.ws?.readyState !== WebSocket.OPEN) return false;
     this.sendRaw({ type: 'user_message', sessionId: this.sessionId, text, context });
     return true;
   }
 
-  /** Прерывает текущий ответ. */
+  /** Aborts the current response. */
   abort(): void {
     if (this.sessionId && this.ws?.readyState === WebSocket.OPEN) {
       this.sendRaw({ type: 'abort', sessionId: this.sessionId });
@@ -89,12 +107,14 @@ export class Transport {
   close(): void {
     this.closedByUser = true;
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    if (this.connectTimer) clearTimeout(this.connectTimer);
     this.ws?.close();
   }
 
-  /** Ручная переподключка (кнопка «Проверить снова» в диагностике). */
+  /** Manual reconnect (the «Check again» button in diagnostics). */
   retry(): void {
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    if (this.connectTimer) clearTimeout(this.connectTimer);
     try {
       this.ws?.close();
     } catch {
@@ -103,7 +123,7 @@ export class Transport {
     this.connect();
   }
 
-  /** Начать новую сессию: забыть сохранённый sessionId и запросить новый. */
+  /** Start a new session: forget the stored sessionId and request a new one. */
   reset(): void {
     this.sessionId = undefined;
     removeStored(this.sidKey);
@@ -131,9 +151,9 @@ export class Transport {
         this.handlers.onEvent(msg.event);
         break;
       case 'error':
-        // До рукопожатия серверная ошибка (неизвестный проект, неверный токен,
-        // версия протокола) — это проблема настройки: показываем в диагностике,
-        // а не теряем в пустом диалоге. После ready — это ошибка ответа агента.
+        // Before the handshake, a server error (unknown project, invalid token,
+        // protocol version) is a configuration problem: show it in diagnostics
+        // instead of losing it in an empty dialog. After ready, it's an agent response error.
         if (this.ready) {
           this.handlers.onEvent({ type: 'error', message: msg.message });
         } else {
@@ -153,7 +173,7 @@ export class Transport {
   }
 }
 
-// --- localStorage с защитой от недоступности (приватный режим и т.п.) ---
+// --- localStorage guarded against unavailability (private mode, etc.) ---
 
 function readStored(key: string): string | undefined {
   try {

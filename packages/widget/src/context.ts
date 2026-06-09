@@ -5,7 +5,7 @@ const ERROR_BUFFER = 10;
 
 const errors: PageError[] = [];
 
-/** Подключает перехват ошибок страницы (вызывать один раз при инициализации). */
+/** Hooks up page error capture (call once during initialization). */
 export function initErrorCapture(): void {
   window.addEventListener('error', (e) => {
     push({
@@ -43,7 +43,7 @@ function stringify(v: unknown): string {
   }
 }
 
-/** Собирает текущий контекст страницы. */
+/** Collects the current page context. */
 export function collectContext(): PageContext {
   return {
     url: location.href,

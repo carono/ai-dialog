@@ -3,7 +3,7 @@ import { App } from './ui/App';
 import { STYLES } from './ui/styles';
 import { initErrorCapture } from './context';
 
-// Параметры берём из data-* атрибутов тега <script>, которым подключён виджет.
+// Parameters are taken from the data-* attributes of the <script> tag that loads the widget.
 const script = document.currentScript as HTMLScriptElement | null;
 const project = script?.dataset.project ?? 'demo';
 const gateway = script?.dataset.gateway ?? `ws://${location.hostname}:8787`;

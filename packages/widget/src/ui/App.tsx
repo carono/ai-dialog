@@ -21,15 +21,19 @@ interface Props {
 const HISTORY_LIMIT = 50;
 let nextId = 1;
 
-/** Локальный шлюз по умолчанию для режима claude-code. */
-const LOCAL_GATEWAY = `ws://${location.hostname}:8787`;
+/** Default port of the local connector (matches the connector's default). */
+const DEFAULT_PORT = 8787;
+/** Local gateway URL for claude-code mode on the given port. */
+const localGatewayUrl = (port: number): string => `ws://${location.hostname}:${port}`;
 const CONN_KEY = 'aidlg.conn';
 
-/** Режим подключения, выбираемый из UI и сохраняемый в localStorage. */
+/** Connection mode, chosen in the UI and saved to localStorage. */
 interface Conn {
-  /** `claude-code` — локальный шлюз; `custom` — произвольный адрес/проект/токен. */
+  /** `claude-code` — local gateway; `custom` — arbitrary address/project/token. */
   mode: 'claude-code' | 'custom';
   gateway: string;
+  /** Local connector port (claude-code mode). */
+  port: number;
   project: string;
   token: string;
 }
@@ -42,7 +46,7 @@ export function App({ project, gateway, token }: Props) {
   const histKey = `aidlg.hist.${eff.project}`;
   const pinnedKey = `aidlg.pinned.${eff.project}`;
   const [pinned, setPinned] = useState(() => loadFlag(pinnedKey));
-  // Если закреплено — панель открыта сразу при загрузке страницы.
+  // If pinned, the panel is open right away on page load.
   const [open, setOpen] = useState(() => loadFlag(pinnedKey));
   const [status, setStatus] = useState<TransportStatus>('connecting');
   const [endpoint, setEndpoint] = useState('');
@@ -61,7 +65,7 @@ export function App({ project, gateway, token }: Props) {
   const bodyRef = useRef<HTMLDivElement>(null);
   const pickerStop = useRef<(() => void) | null>(null);
 
-  // Текущее ассистентское сообщение, в которое стримятся события.
+  // Current assistant message that events are streamed into.
   const activeId = useRef<number | null>(null);
 
   const handleEvent = useCallback((event: AgentEvent) => {
@@ -106,8 +110,8 @@ export function App({ project, gateway, token }: Props) {
     return () => t.close();
   }, [eff.gateway, eff.project, eff.token, handleEvent]);
 
-  // Применить новые параметры подключения: сохранить, переподключиться,
-  // показать историю выбранного проекта.
+  // Apply new connection parameters: save, reconnect,
+  // show the history of the selected project.
   const applyConn = useCallback(
     (next: Conn) => {
       const effProject = effectiveConn(next, { project, token }).project;
@@ -125,12 +129,12 @@ export function App({ project, gateway, token }: Props) {
     if (bodyRef.current) bodyRef.current.scrollTop = bodyRef.current.scrollHeight;
   }, [messages, open]);
 
-  // Сохраняем диалог в localStorage — переживает смену страницы и перезагрузку.
+  // Persist the dialog to localStorage — survives page changes and reloads.
   useEffect(() => {
     saveHistory(histKey, messages);
   }, [histKey, messages]);
 
-  // Запустить инспектор: свернуть панель, подсветка элементов, клик фиксирует.
+  // Start the inspector: collapse the panel, highlight elements, click locks one in.
   const startPick = useCallback(() => {
     pickerStop.current?.();
     setOpen(false);
@@ -176,7 +180,7 @@ export function App({ project, gateway, token }: Props) {
     activeId.current = null;
   }, []);
 
-  // Закрепить окно: оставаться открытым после перезагрузки страницы.
+  // Pin the window: stay open after a page reload.
   const togglePin = useCallback(() => {
     setPinned((p) => {
       const v = !p;
@@ -185,7 +189,7 @@ export function App({ project, gateway, token }: Props) {
     });
   }, [pinnedKey]);
 
-  // Очистить: новая сессия на шлюзе + чистый диалог и история.
+  // Clear: new session on the gateway + clean dialog and history.
   const clear = useCallback(() => {
     transportRef.current?.reset();
     activeId.current = null;
@@ -252,12 +256,11 @@ export function App({ project, gateway, token }: Props) {
           {settingsOpen ? (
             <Settings
               conn={conn}
-              localGateway={LOCAL_GATEWAY}
               onApply={applyConn}
               onClose={() => setSettingsOpen(false)}
             />
           ) : status !== 'ready' ? (
-            // Нет связи — показываем только диагностику, окно чата убираем.
+            // No connection — show only diagnostics, hide the chat window.
             <Diagnostics
               reason={classifyDiag(status, diag)}
               statusText={statusText}
@@ -351,9 +354,9 @@ export function App({ project, gateway, token }: Props) {
   );
 }
 
-// --- Диагностика и самонастройка ---
+// --- Diagnostics and self-configuration ---
 
-/** Полная инструкция по развёртыванию шлюза и подключению (для человека и ИИ-агента). */
+/** Full guide for deploying the gateway and connecting (for a human and an AI agent). */
 const DOCS_URL = 'https://github.com/carono/ai-dialog/blob/master/docs/INTEGRATION.md';
 
 type DiagReason = 'connecting' | 'no-gateway' | 'unknown-project' | 'bad-token' | 'protocol' | 'other';
@@ -383,7 +386,7 @@ interface DiagProps {
   onSettings: () => void;
 }
 
-/** Блок «что не так и как починить» — основной онбординг-экран виджета. */
+/** The "what's wrong and how to fix it" block — the widget's main onboarding screen. */
 function Diagnostics({ reason, statusText, gateway, wsHost, project, token, detail, onRetry, onSettings }: DiagProps) {
   const tokenVal = token && token.length ? token : 'CHOOSE-A-SECRET';
   const health = 'curl -s http://127.0.0.1:8787/health';
@@ -399,6 +402,20 @@ function Diagnostics({ reason, statusText, gateway, wsHost, project, token, deta
     `  data-project="${project}"\n` +
     `  data-gateway="${gateway}"\n` +
     `  data-token="${tokenVal}"></script>`;
+  // Ready-to-run command that starts the local Claude Code connector matching this widget.
+  const port = (() => {
+    try {
+      const p = new URL(gateway).port;
+      return p ? Number(p) : DEFAULT_PORT;
+    } catch {
+      return DEFAULT_PORT;
+    }
+  })();
+  const startCmd =
+    'npx carono-ai-dialog-connector --repo /path/to/your/repo' +
+    ` --project ${project}` +
+    (token ? ` --token ${token}` : '') +
+    (port !== DEFAULT_PORT ? ` --port ${port}` : '');
 
   const title =
     reason === 'connecting'
@@ -420,31 +437,35 @@ function Diagnostics({ reason, statusText, gateway, wsHost, project, token, deta
       <div class="diag-title">{title}</div>
 
       {reason === 'connecting' && (
-        <p>
-          Opening a WebSocket connection to <code>{wsHost}</code>. If this hangs for a while, the
-          gateway is probably unavailable (what it is and how to check — see below).
-        </p>
+        <>
+          <p>
+            Opening a WebSocket connection to <code>{wsHost}</code>. If it hangs, the connector
+            probably isn't running — start it (copy &amp; run):
+          </p>
+          <Copyable code={startCmd} />
+          <p class="diag-note">
+            Replace the repo path with yours. It listens on <code>{wsHost}</code> and the widget
+            connects automatically.
+          </p>
+        </>
       )}
 
       {reason === 'no-gateway' && (
         <>
           <p>
-            The widget is only a client. To get answers it needs a shared <b>gateway</b> service: it
-            accepts widget connections and, by the <code>project</code>+<code>token</code> pair,{' '}
-            routes the request to an AI engine with access to the project's code. One gateway serves
-            all projects.
+            The widget needs a running <b>connector</b> to answer. If you have Claude Code on the
+            machine with your repo, start it (copy &amp; run):
           </p>
-          <ol>
-            <li>
-              Check the gateway is running (on its machine) — expect <code>{'{"ok":true,…}'}</code>:
-              <Copyable code={health} />
-            </li>
-            <li>
-              The browser uses <code>wss</code>, so <code>{wsHost}</code> must be proxied to the
-              gateway with a WebSocket upgrade and resolve in the browser.
-            </li>
-            <li>If you don't run the gateway — ask its owner to bring it up (guide below).</li>
-          </ol>
+          <Copyable code={startCmd} />
+          <p class="diag-note">
+            Replace the repo path with yours. It listens on <code>{wsHost}</code> and the widget
+            reconnects automatically.
+          </p>
+          <p>
+            Using a <b>remote gateway</b> instead? Make sure it is up and proxied: it should answer{' '}
+            <code>{'{"ok":true,…}'}</code> on <code>/health</code>, and <code>{wsHost}</code> must be
+            proxied with a WebSocket upgrade (<code>wss</code>) and resolve in the browser.
+          </p>
         </>
       )}
 
@@ -540,19 +561,19 @@ function Diagnostics({ reason, statusText, gateway, wsHost, project, token, deta
   );
 }
 
-// --- Настройки подключения (claude-code / произвольный шлюз) ---
+// --- Connection settings (claude-code / custom gateway) ---
 
 interface SettingsProps {
   conn: Conn;
-  localGateway: string;
   onApply: (next: Conn) => void;
   onClose: () => void;
 }
 
-/** Панель выбора режима подключения и ручных параметров. */
-function Settings({ conn, localGateway, onApply, onClose }: SettingsProps) {
+/** Panel for choosing the connection mode and manual parameters. */
+function Settings({ conn, onApply, onClose }: SettingsProps) {
   const [mode, setMode] = useState<Conn['mode']>(conn.mode);
   const [gateway, setGateway] = useState(conn.gateway || '');
+  const [port, setPort] = useState(conn.port || DEFAULT_PORT);
   const [project, setProject] = useState(conn.project || '');
   const [token, setToken] = useState(conn.token || '');
 
@@ -560,6 +581,7 @@ function Settings({ conn, localGateway, onApply, onClose }: SettingsProps) {
     onApply({
       mode,
       gateway: gateway.trim(),
+      port: Number(port) || DEFAULT_PORT,
       project: project.trim(),
       token: token.trim(),
     });
@@ -577,12 +599,27 @@ function Settings({ conn, localGateway, onApply, onClose }: SettingsProps) {
           onChange={() => setMode('claude-code')}
         />
         <span>
-          <b>Claude Code</b> — local gateway
+          <b>Claude Code</b> — local connector
           <small>
-            <code>{localGateway}</code>; project and token come from the page settings
+            <code>{localGatewayUrl(Number(port) || DEFAULT_PORT)}</code>; project and token come from
+            the page settings
           </small>
         </span>
       </label>
+
+      {mode === 'claude-code' && (
+        <div class="settings-fields">
+          <label>
+            Port
+            <input
+              type="number"
+              placeholder={String(DEFAULT_PORT)}
+              value={port}
+              onInput={(e) => setPort(Number((e.target as HTMLInputElement).value))}
+            />
+          </label>
+        </div>
+      )}
 
       <label class="settings-mode">
         <input type="radio" checked={mode === 'custom'} onChange={() => setMode('custom')} />
@@ -635,20 +672,21 @@ function Settings({ conn, localGateway, onApply, onClose }: SettingsProps) {
   );
 }
 
-// --- Режим подключения в localStorage ---
+// --- Connection mode in localStorage ---
 
-/** Эффективные параметры подключения для выбранного режима. */
+/** Effective connection parameters for the selected mode. */
 function effectiveConn(
   conn: Conn,
   props: { project: string; token?: string },
 ): { gateway: string; project: string; token?: string } {
+  const local = localGatewayUrl(conn.port || DEFAULT_PORT);
   if (conn.mode === 'custom') {
-    return { gateway: conn.gateway || LOCAL_GATEWAY, project: conn.project, token: conn.token || undefined };
+    return { gateway: conn.gateway || local, project: conn.project, token: conn.token || undefined };
   }
-  return { gateway: LOCAL_GATEWAY, project: props.project, token: props.token };
+  return { gateway: local, project: props.project, token: props.token };
 }
 
-/** Загружает сохранённый режим; по умолчанию выводит его из data-* атрибутов. */
+/** Loads the saved mode; by default derives it from the data-* attributes. */
 function loadConn(props: { project: string; gateway: string; token?: string }): Conn {
   try {
     const raw = localStorage.getItem(CONN_KEY);
@@ -658,6 +696,7 @@ function loadConn(props: { project: string; gateway: string; token?: string }): 
         return {
           mode: c.mode,
           gateway: c.gateway || '',
+          port: Number(c.port) || DEFAULT_PORT,
           project: c.project || '',
           token: c.token || '',
         };
@@ -666,12 +705,13 @@ function loadConn(props: { project: string; gateway: string; token?: string }): 
   } catch {
     /* noop */
   }
-  // Нет сохранённого выбора: если страница указала нелокальный шлюз — стартуем
-  // в режиме «произвольный» с этими значениями, иначе — claude-code (локальный).
-  const remote = props.gateway && props.gateway !== LOCAL_GATEWAY;
+  // No saved choice: if the page specified a non-local gateway, start
+  // in "custom" mode with those values, otherwise claude-code (local).
+  const remote = props.gateway && props.gateway !== localGatewayUrl(DEFAULT_PORT);
   return {
     mode: remote ? 'custom' : 'claude-code',
     gateway: props.gateway || '',
+    port: DEFAULT_PORT,
     project: props.project,
     token: props.token || '',
   };
@@ -685,7 +725,7 @@ function saveConn(conn: Conn): void {
   }
 }
 
-/** Блок кода с кнопкой «копировать». */
+/** Code block with a "copy" button. */
 function Copyable({ code }: { code: string }) {
   const [copied, setCopied] = useState(false);
   return (
@@ -709,7 +749,7 @@ function Copyable({ code }: { code: string }) {
   );
 }
 
-// --- Сохранение диалога в localStorage ---
+// --- Persisting the dialog to localStorage ---
 
 function loadHistory(key: string): Msg[] {
   try {

@@ -1,4 +1,4 @@
-/** Стили виджета. Инлайнятся в Shadow DOM — не протекают на сайт-хост и наоборот. */
+/** Widget styles. Inlined into the Shadow DOM — they don't leak onto the host site or vice versa. */
 export const STYLES = `
 :host { all: initial; }
 * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }

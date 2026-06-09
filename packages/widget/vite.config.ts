@@ -1,8 +1,8 @@
 import { defineConfig } from 'vite';
 import preact from '@preact/preset-vite';
 
-// Сборка одного самодостаточного IIFE-бандла widget.js,
-// который подключается на любой сайт через <script src>.
+// Builds a single self-contained IIFE bundle widget.js,
+// which is embedded into any site via <script src>.
 export default defineConfig({
   plugins: [preact()],
   build: {
@@ -15,7 +15,7 @@ export default defineConfig({
     rollupOptions: {
       output: { inlineDynamicImports: true },
     },
-    // CSS не выносим в отдельный файл — стили инлайнятся в Shadow DOM как строка.
+    // We don't split CSS into a separate file — styles are inlined into the Shadow DOM as a string.
     cssCodeSplit: false,
     target: 'es2018',
   },

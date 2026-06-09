@@ -1,11 +1,11 @@
 import type { SelectedElement } from '@ai-dialog/shared';
 
 /**
- * Режим «выбор элемента» как в DevTools: подсветка при наведении, клик фиксирует.
- * Оверлей рисуется в основном document (вне Shadow DOM), чтобы покрыть страницу.
+ * DevTools-style «element pick» mode: highlight on hover, click locks the selection.
+ * The overlay is drawn in the main document (outside the Shadow DOM) to cover the page.
  *
- * @param host  корневой узел виджета — его элементы выбирать нельзя.
- * @returns функция остановки (cleanup).
+ * @param host  the widget's root node — its elements can't be selected.
+ * @returns the stop function (cleanup).
  */
 export function startPicker(
   host: Element,
@@ -120,7 +120,7 @@ function build(el: Element): SelectedElement {
   };
 }
 
-/** Строит уникальный (в пределах разумного) CSS-путь к элементу. */
+/** Builds a (reasonably) unique CSS path to the element. */
 function cssPath(el: Element): string {
   const esc = (s: string): string =>
     typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(s) : s;
