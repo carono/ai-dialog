@@ -29,11 +29,13 @@ export const STYLES = `
 .header .endpoint { font-size: 11px; opacity: .6; }
 .header .pin { background: none; border: none; cursor: pointer; font-size: 14px; line-height: 1; padding: 2px 4px; opacity: .4; filter: grayscale(1); }
 .header .pin.on { opacity: 1; filter: none; }
+.header .gear { background: none; border: none; cursor: pointer; color: #fff; font-size: 14px; line-height: 1; padding: 2px 4px; opacity: .55; }
+.header .gear:hover, .header .gear.on { opacity: 1; }
 .header .clear { background: rgba(255,255,255,.12); border: none; color: #fff; cursor: pointer; font-size: 11px; padding: 3px 8px; border-radius: 6px; }
 .header .clear:hover { background: rgba(255,255,255,.22); }
 .header .close { background: none; border: none; color: #fff; cursor: pointer; font-size: 18px; }
 
-.diag { background: #fff8e1; border-bottom: 1px solid #ffe0a3; color: #664d03; padding: 11px 13px; font-size: 12px; line-height: 1.5; max-height: 60%; overflow-y: auto; }
+.diag { background: #fff8e1; color: #664d03; padding: 11px 13px; font-size: 12px; line-height: 1.5; flex: 1 1 auto; min-height: 0; overflow-y: auto; }
 .diag code { background: rgba(0,0,0,.07); padding: 1px 5px; border-radius: 4px; font-family: ui-monospace, monospace; word-break: break-all; }
 .diag-title { font-weight: 700; font-size: 13px; margin-bottom: 6px; }
 .diag p { margin: 0 0 8px; }
@@ -109,4 +111,29 @@ export const STYLES = `
 }
 .footer button:disabled { background: #c4cdd5; cursor: default; }
 .footer button.stop { background: #d1242f; }
+
+.settings { padding: 12px 13px; background: #f6f8fa; font-size: 12px; color: #1f2328; flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+.settings-title { font-weight: 700; font-size: 13px; margin-bottom: 8px; }
+.settings-mode { display: flex; gap: 8px; align-items: flex-start; padding: 6px 0; cursor: pointer; }
+.settings-mode input { margin-top: 2px; }
+.settings-mode b { font-weight: 600; }
+.settings-mode small { display: block; color: #6b7280; margin-top: 2px; }
+.settings-mode code { background: rgba(0,0,0,.06); padding: 1px 4px; border-radius: 4px; font-family: ui-monospace, monospace; }
+.settings-fields { display: flex; flex-direction: column; gap: 7px; margin: 6px 0 4px; padding-left: 24px; }
+.settings-fields label { display: flex; flex-direction: column; gap: 3px; color: #57606a; font-size: 11px; }
+.settings-fields input {
+  border: 1px solid #d0d7de; border-radius: 7px; padding: 7px 9px; font-size: 13px;
+  color: #1f2328; outline: none;
+}
+.settings-fields input:focus { border-color: #1f6feb; }
+.settings-actions { display: flex; gap: 8px; margin-top: 10px; }
+.settings-apply {
+  border: none; border-radius: 7px; padding: 7px 14px; cursor: pointer;
+  background: #1f6feb; color: #fff; font-size: 13px; font-weight: 500;
+}
+.settings-apply:disabled { background: #c4cdd5; cursor: default; }
+.settings-cancel {
+  border: 1px solid #d0d7de; border-radius: 7px; padding: 7px 14px; cursor: pointer;
+  background: #fff; color: #57606a; font-size: 13px;
+}
 `;

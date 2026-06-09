@@ -62,13 +62,13 @@ export class Transport {
     });
 
     ws.addEventListener('close', (e) => {
-      const detail = `закрыто (код ${e.code}${e.reason ? `: ${e.reason}` : ''})`;
+      const detail = `closed (code ${e.code}${e.reason ? `: ${e.reason}` : ''})`;
       this.handlers.onStatus('closed', detail);
       if (!this.closedByUser) this.scheduleReconnect();
     });
 
     ws.addEventListener('error', () => {
-      this.handlers.onStatus('error', `не удалось открыть WS к ${this.gateway}`);
+      this.handlers.onStatus('error', `couldn't open WebSocket to ${this.gateway}`);
     });
   }
 

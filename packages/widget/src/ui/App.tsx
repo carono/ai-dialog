@@ -21,9 +21,26 @@ interface Props {
 const HISTORY_LIMIT = 50;
 let nextId = 1;
 
+/** Локальный шлюз по умолчанию для режима claude-code. */
+const LOCAL_GATEWAY = `ws://${location.hostname}:8787`;
+const CONN_KEY = 'aidlg.conn';
+
+/** Режим подключения, выбираемый из UI и сохраняемый в localStorage. */
+interface Conn {
+  /** `claude-code` — локальный шлюз; `custom` — произвольный адрес/проект/токен. */
+  mode: 'claude-code' | 'custom';
+  gateway: string;
+  project: string;
+  token: string;
+}
+
 export function App({ project, gateway, token }: Props) {
-  const histKey = `aidlg.hist.${project}`;
-  const pinnedKey = `aidlg.pinned.${project}`;
+  const [conn, setConn] = useState<Conn>(() => loadConn({ project, gateway, token }));
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const eff = effectiveConn(conn, { project, token });
+
+  const histKey = `aidlg.hist.${eff.project}`;
+  const pinnedKey = `aidlg.pinned.${eff.project}`;
   const [pinned, setPinned] = useState(() => loadFlag(pinnedKey));
   // Если закреплено — панель открыта сразу при загрузке страницы.
   const [open, setOpen] = useState(() => loadFlag(pinnedKey));
@@ -72,7 +89,7 @@ export function App({ project, gateway, token }: Props) {
   }, []);
 
   useEffect(() => {
-    const t = new Transport(gateway, project, token, {
+    const t = new Transport(eff.gateway, eff.project, eff.token, {
       onStatus: (s, detail) => {
         setStatus(s);
         if (s === 'ready') {
@@ -87,7 +104,22 @@ export function App({ project, gateway, token }: Props) {
     t.connect();
     transportRef.current = t;
     return () => t.close();
-  }, [gateway, project, token, handleEvent]);
+  }, [eff.gateway, eff.project, eff.token, handleEvent]);
+
+  // Применить новые параметры подключения: сохранить, переподключиться,
+  // показать историю выбранного проекта.
+  const applyConn = useCallback(
+    (next: Conn) => {
+      const effProject = effectiveConn(next, { project, token }).project;
+      saveConn(next);
+      setConn(next);
+      setSettingsOpen(false);
+      activeId.current = null;
+      setBusy(false);
+      setMessages(loadHistory(`aidlg.hist.${effProject}`));
+    },
+    [project, token],
+  );
 
   useEffect(() => {
     if (bodyRef.current) bodyRef.current.scrollTop = bodyRef.current.scrollHeight;
@@ -171,19 +203,19 @@ export function App({ project, gateway, token }: Props) {
 
   const wsHost = (() => {
     try {
-      return new URL(gateway).host;
+      return new URL(eff.gateway).host;
     } catch {
-      return gateway;
+      return eff.gateway;
     }
   })();
   const statusText =
     status === 'ready'
-      ? 'на связи'
+      ? 'connected'
       : status === 'connecting'
-        ? 'подключаюсь…'
+        ? 'connecting…'
         : status === 'closed'
-          ? 'соединение закрыто'
-          : 'ошибка соединения';
+          ? 'connection closed'
+          : 'connection error';
 
   return (
     <>
@@ -191,111 +223,128 @@ export function App({ project, gateway, token }: Props) {
         <div class="panel">
           <div class="header">
             <span class={`dot ${status === 'ready' ? 'ready' : ''}`} />
-            <span class="title">AI диалог</span>
+            <span class="title">AI dialog</span>
             {endpoint && <span class="endpoint">{endpoint}</span>}
+            <button
+              class={`gear ${settingsOpen ? 'on' : ''}`}
+              onClick={() => setSettingsOpen((v) => !v)}
+              title="Connection settings"
+            >
+              ⚙
+            </button>
             <button
               class={`pin ${pinned ? 'on' : ''}`}
               onClick={togglePin}
-              title={pinned ? 'Закреплено: окно открывается при загрузке' : 'Закрепить окно открытым'}
+              title={pinned ? 'Pinned: opens on page load' : 'Pin the window open'}
             >
               📌
             </button>
             {messages.length > 0 && (
-              <button class="clear" onClick={clear} title="Начать новый диалог">
-                Очистить
+              <button class="clear" onClick={clear} title="Start a new dialog">
+                Clear
               </button>
             )}
-            <button class="close" onClick={() => setOpen(false)} aria-label="Закрыть">
+            <button class="close" onClick={() => setOpen(false)} aria-label="Close">
               ×
             </button>
           </div>
 
-          {status !== 'ready' && (
+          {settingsOpen ? (
+            <Settings
+              conn={conn}
+              localGateway={LOCAL_GATEWAY}
+              onApply={applyConn}
+              onClose={() => setSettingsOpen(false)}
+            />
+          ) : status !== 'ready' ? (
+            // Нет связи — показываем только диагностику, окно чата убираем.
             <Diagnostics
               reason={classifyDiag(status, diag)}
               statusText={statusText}
-              gateway={gateway}
+              gateway={eff.gateway}
               wsHost={wsHost}
-              project={project}
-              token={token}
+              project={eff.project}
+              token={eff.token}
               detail={diag}
               onRetry={() => transportRef.current?.retry()}
+              onSettings={() => setSettingsOpen(true)}
             />
-          )}
-
-          <div class="body" ref={bodyRef}>
-            {messages.length === 0 ? (
-              <div class="empty">
-                Спросите что-нибудь о текущей странице. Контекст (URL, маршрут, видимый текст)
-                уйдёт вместе с вопросом.
-              </div>
-            ) : (
-              messages.map((m) => (
-                <div key={m.id} class={`msg ${m.role}`}>
-                  <div>
-                    <div class={`bubble ${m.error ? 'error' : ''}`}>
-                      {m.text || (m.role === 'assistant' && busy ? '…' : '')}
-                    </div>
-                    {m.tools.length > 0 && (
-                      <div class="tools">
-                        {m.tools.map((t, i) => (
-                          <span key={i} class="tool">
-                            {t}
-                          </span>
-                        ))}
-                      </div>
-                    )}
+          ) : (
+            <>
+              <div class="body" ref={bodyRef}>
+                {messages.length === 0 ? (
+                  <div class="empty">
+                    Ask anything about the current page. The context (URL, route, visible text) is
+                    sent along with your question.
                   </div>
+                ) : (
+                  messages.map((m) => (
+                    <div key={m.id} class={`msg ${m.role}`}>
+                      <div>
+                        <div class={`bubble ${m.error ? 'error' : ''}`}>
+                          {m.text || (m.role === 'assistant' && busy ? '…' : '')}
+                        </div>
+                        {m.tools.length > 0 && (
+                          <div class="tools">
+                            {m.tools.map((t, i) => (
+                              <span key={i} class="tool">
+                                {t}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              {selectedEl && (
+                <div class="picked">
+                  <span class="picked-sel" title={selectedEl.selector}>
+                    🎯 {selectedEl.selector}
+                  </span>
+                  <button
+                    class="picked-x"
+                    onClick={() => setSelectedEl(null)}
+                    title="Remove element"
+                  >
+                    ✕
+                  </button>
                 </div>
-              ))
-            )}
-          </div>
+              )}
 
-          {selectedEl && (
-            <div class="picked">
-              <span class="picked-sel" title={selectedEl.selector}>
-                🎯 {selectedEl.selector}
-              </span>
-              <button class="picked-x" onClick={() => setSelectedEl(null)} title="Убрать элемент">
-                ✕
-              </button>
-            </div>
+              <div class="footer">
+                <button class="pick" onClick={startPick} title="Pick an element on the page">
+                  ⌖
+                </button>
+                <textarea
+                  rows={1}
+                  placeholder="Your question…"
+                  value={input}
+                  onInput={(e) => setInput((e.target as HTMLTextAreaElement).value)}
+                  onKeyDown={onKeyDown}
+                />
+                {busy ? (
+                  <button class="stop" onClick={stop}>
+                    Stop
+                  </button>
+                ) : (
+                  <button onClick={send} disabled={!input.trim()}>
+                    ➤
+                  </button>
+                )}
+              </div>
+            </>
           )}
-
-          <div class="footer">
-            <button
-              class="pick"
-              onClick={startPick}
-              disabled={status !== 'ready'}
-              title="Выбрать элемент на странице"
-            >
-              ⌖
-            </button>
-            <textarea
-              rows={1}
-              placeholder="Ваш вопрос…"
-              value={input}
-              onInput={(e) => setInput((e.target as HTMLTextAreaElement).value)}
-              onKeyDown={onKeyDown}
-            />
-            {busy ? (
-              <button class="stop" onClick={stop}>
-                Стоп
-              </button>
-            ) : (
-              <button onClick={send} disabled={!input.trim() || status !== 'ready'}>
-                ➤
-              </button>
-            )}
-          </div>
         </div>
       )}
 
       {picking && (
-        <div class="pick-hint">Кликните элемент на странице · Esc — отмена</div>
+        <div class="pick-hint">Click an element on the page · Esc to cancel</div>
       )}
 
-      <button class="launcher" onClick={() => setOpen((v) => !v)} aria-label="AI диалог">
+      <button class="launcher" onClick={() => setOpen((v) => !v)} aria-label="AI dialog">
         {open ? '×' : '💬'}
       </button>
     </>
@@ -309,13 +358,15 @@ const DOCS_URL = 'https://github.com/carono/ai-dialog/blob/master/docs/INTEGRATI
 
 type DiagReason = 'connecting' | 'no-gateway' | 'unknown-project' | 'bad-token' | 'protocol' | 'other';
 
-/** Определяет причину по статусу транспорта и тексту серверной ошибки. */
+/** Determines the reason from the transport status and the server error text. */
 function classifyDiag(status: TransportStatus, diag: string): DiagReason {
   const d = diag.toLowerCase();
-  if (d.includes('неизвестный проект')) return 'unknown-project';
-  if (d.includes('токен')) return 'bad-token';
-  if (d.includes('протокол')) return 'protocol';
+  if (d.includes('unknown project')) return 'unknown-project';
+  if (d.includes('token')) return 'bad-token';
+  if (d.includes('protocol')) return 'protocol';
   if (status === 'connecting') return 'connecting';
+  // WebSocket-level failures (open failed / connection closed) → gateway unreachable.
+  if (status === 'closed' || d.includes('websocket')) return 'no-gateway';
   if (diag) return 'other';
   return 'no-gateway';
 }
@@ -329,16 +380,17 @@ interface DiagProps {
   token?: string;
   detail: string;
   onRetry: () => void;
+  onSettings: () => void;
 }
 
 /** Блок «что не так и как починить» — основной онбординг-экран виджета. */
-function Diagnostics({ reason, statusText, gateway, wsHost, project, token, detail, onRetry }: DiagProps) {
-  const tokenVal = token && token.length ? token : 'ПРИДУМАЙТЕ-СЕКРЕТ';
+function Diagnostics({ reason, statusText, gateway, wsHost, project, token, detail, onRetry, onSettings }: DiagProps) {
+  const tokenVal = token && token.length ? token : 'CHOOSE-A-SECRET';
   const health = 'curl -s http://127.0.0.1:8787/health';
   const projectsJson =
     `"${project}": {\n` +
     '  "endpoint": "claude-code",\n' +
-    '  "repoPath": "/абсолютный/путь/к/репозиторию",\n' +
+    '  "repoPath": "/absolute/path/to/your/repo",\n' +
     `  "token": "${tokenVal}",\n` +
     '  "allowWrite": false\n' +
     '}';
@@ -350,18 +402,18 @@ function Diagnostics({ reason, statusText, gateway, wsHost, project, token, deta
 
   const title =
     reason === 'connecting'
-      ? 'Подключаюсь к шлюзу…'
+      ? 'Connecting to the gateway…'
       : reason === 'unknown-project'
-        ? 'Проект не заведён на шлюзе'
+        ? "Project isn't registered on the gateway"
         : reason === 'bad-token'
           ? token
-            ? 'Неверный токен проекта'
-            : 'Не указан токен проекта'
+            ? 'Invalid project token'
+            : 'No project token set'
           : reason === 'protocol'
-            ? 'Версии виджета и шлюза не совпадают'
+            ? 'Widget and gateway versions differ'
             : reason === 'other'
-              ? 'Не удалось подключиться'
-              : 'Шлюз недоступен';
+              ? "Couldn't connect"
+              : 'Gateway unavailable';
 
   return (
     <div class="diag">
@@ -369,29 +421,29 @@ function Diagnostics({ reason, statusText, gateway, wsHost, project, token, deta
 
       {reason === 'connecting' && (
         <p>
-          Устанавливаю WebSocket-соединение с <code>{wsHost}</code>. Если надолго зависло — шлюз,
-          скорее всего, недоступен (что это и как проверить — см. ниже).
+          Opening a WebSocket connection to <code>{wsHost}</code>. If this hangs for a while, the
+          gateway is probably unavailable (what it is and how to check — see below).
         </p>
       )}
 
       {reason === 'no-gateway' && (
         <>
           <p>
-            Виджет — это только клиент. Чтобы он отвечал, нужен общий сервис-<b>шлюз</b>: он
-            принимает соединения виджетов и по паре <code>project</code>+<code>token</code>{' '}
-            направляет запрос в AI-движок с доступом к коду проекта. Один шлюз обслуживает все
-            проекты.
+            The widget is only a client. To get answers it needs a shared <b>gateway</b> service: it
+            accepts widget connections and, by the <code>project</code>+<code>token</code> pair,{' '}
+            routes the request to an AI engine with access to the project's code. One gateway serves
+            all projects.
           </p>
           <ol>
             <li>
-              Проверьте, что шлюз запущен (на его машине) — ждём <code>{'{"ok":true,…}'}</code>:
+              Check the gateway is running (on its machine) — expect <code>{'{"ok":true,…}'}</code>:
               <Copyable code={health} />
             </li>
             <li>
-              Браузер ходит по <code>wss</code>, поэтому <code>{wsHost}</code> должен проксироваться
-              на шлюз с WebSocket-upgrade и резолвиться в браузере.
+              The browser uses <code>wss</code>, so <code>{wsHost}</code> must be proxied to the
+              gateway with a WebSocket upgrade and resolve in the browser.
             </li>
-            <li>Если шлюзом управляете не вы — попросите владельца поднять его (инструкция ниже).</li>
+            <li>If you don't run the gateway — ask its owner to bring it up (guide below).</li>
           </ol>
         </>
       )}
@@ -399,22 +451,22 @@ function Diagnostics({ reason, statusText, gateway, wsHost, project, token, deta
       {reason === 'unknown-project' && (
         <>
           <p>
-            Шлюз отвечает (значит, он работает и доступен), но проекта <code>{project}</code> нет в
-            его реестре <code>projects.json</code>.
+            The gateway responds (so it's running and reachable), but project <code>{project}</code>{' '}
+            is not in its <code>projects.json</code> registry.
           </p>
           <ol>
             <li>
-              Добавьте запись в <code>projects.json</code> шлюза:
+              Add an entry to the gateway's <code>projects.json</code>:
               <Copyable code={projectsJson} />
             </li>
             <li>
-              Перезапустите шлюз и проверьте, что проект появился (в <code>"projects"</code> должен
-              быть <code>{project}</code>):
+              Restart the gateway and check the project appears (<code>{project}</code> should be in{' '}
+              <code>"projects"</code>):
               <Copyable code={health} />
             </li>
             <li>
-              <code>{project}</code> — это значение <code>data-project</code> на теге скрипта
-              виджета. Ключ в projects.json должен совпадать.
+              <code>{project}</code> is the <code>data-project</code> value on the widget's script
+              tag. The key in projects.json must match it.
             </li>
           </ol>
         </>
@@ -423,31 +475,31 @@ function Diagnostics({ reason, statusText, gateway, wsHost, project, token, deta
       {reason === 'bad-token' && (
         <>
           <p>
-            У проекта <code>{project}</code> на шлюзе задан токен, а виджет прислал{' '}
-            {token ? 'другой' : 'пустой'}.
+            Project <code>{project}</code> has a token set on the gateway, but the widget sent{' '}
+            {token ? 'a different one' : 'an empty one'}.
           </p>
           <ol>
             <li>
-              Укажите токен на стороне сайта — атрибут <code>data-token</code> на теге скрипта
-              виджета:
+              Set the token on the site side — the <code>data-token</code> attribute on the widget's
+              script tag:
               <Copyable code={scriptTag} />
             </li>
             <li>
-              Он должен совпадать с полем <code>token</code> этого проекта в{' '}
-              <code>projects.json</code> шлюза.
+              It must match the <code>token</code> field of this project in the gateway's{' '}
+              <code>projects.json</code>.
             </li>
-            <li>После правки перезагрузите страницу — токен читается из тега при загрузке.</li>
+            <li>After editing, reload the page — the token is read from the tag on load.</li>
           </ol>
           <p class="diag-note">
-            Токен — простая защита: чтобы чужой сайт не дёргал ваш репозиторий через шлюз.
+            The token is simple protection: so another site can't reach your repo through the gateway.
           </p>
         </>
       )}
 
       {reason === 'protocol' && (
         <p>
-          {detail || 'Несовместимая версия протокола.'} Обновите виджет (npm-asset{' '}
-          <code>carono-ai-dialog-widget</code>) и шлюз до совместимых версий.
+          {detail || 'Incompatible protocol version.'} Update the widget (npm-asset{' '}
+          <code>carono-ai-dialog-widget</code>) and the gateway to compatible versions.
         </p>
       )}
 
@@ -455,34 +507,182 @@ function Diagnostics({ reason, statusText, gateway, wsHost, project, token, deta
 
       <div class="diag-vals">
         <span>
-          статус: <code>{statusText}</code>
+          status: <code>{statusText}</code>
         </span>
         <span>
-          адрес: <code>{gateway}</code>
+          address: <code>{gateway}</code>
         </span>
         <span>
-          проект: <code>{project}</code>
+          project: <code>{project}</code>
         </span>
         <span>
-          токен: <code>{token && token.length ? 'задан' : 'не задан'}</code>
+          token: <code>{token && token.length ? 'set' : 'not set'}</code>
         </span>
         {detail && reason !== 'other' && reason !== 'protocol' && (
           <span>
-            детали: <code>{detail}</code>
+            details: <code>{detail}</code>
           </span>
         )}
       </div>
 
       <div class="diag-actions">
         <button class="diag-retry" onClick={onRetry}>
-          ↻ Проверить снова
+          ↻ Check again
+        </button>
+        <button class="diag-retry" onClick={onSettings}>
+          ⚙ Change gateway
         </button>
         <a class="diag-docs" href={DOCS_URL} target="_blank" rel="noopener noreferrer">
-          Инструкция по настройке →
+          Setup guide →
         </a>
       </div>
     </div>
   );
+}
+
+// --- Настройки подключения (claude-code / произвольный шлюз) ---
+
+interface SettingsProps {
+  conn: Conn;
+  localGateway: string;
+  onApply: (next: Conn) => void;
+  onClose: () => void;
+}
+
+/** Панель выбора режима подключения и ручных параметров. */
+function Settings({ conn, localGateway, onApply, onClose }: SettingsProps) {
+  const [mode, setMode] = useState<Conn['mode']>(conn.mode);
+  const [gateway, setGateway] = useState(conn.gateway || '');
+  const [project, setProject] = useState(conn.project || '');
+  const [token, setToken] = useState(conn.token || '');
+
+  const apply = () =>
+    onApply({
+      mode,
+      gateway: gateway.trim(),
+      project: project.trim(),
+      token: token.trim(),
+    });
+
+  const customValid = mode === 'claude-code' || (gateway.trim() !== '' && project.trim() !== '');
+
+  return (
+    <div class="settings">
+      <div class="settings-title">Connection</div>
+
+      <label class="settings-mode">
+        <input
+          type="radio"
+          checked={mode === 'claude-code'}
+          onChange={() => setMode('claude-code')}
+        />
+        <span>
+          <b>Claude Code</b> — local gateway
+          <small>
+            <code>{localGateway}</code>; project and token come from the page settings
+          </small>
+        </span>
+      </label>
+
+      <label class="settings-mode">
+        <input type="radio" checked={mode === 'custom'} onChange={() => setMode('custom')} />
+        <span>
+          <b>Custom gateway</b> — set manually
+        </span>
+      </label>
+
+      {mode === 'custom' && (
+        <div class="settings-fields">
+          <label>
+            Gateway address
+            <input
+              type="text"
+              placeholder="wss://your-gateway.example"
+              value={gateway}
+              onInput={(e) => setGateway((e.target as HTMLInputElement).value)}
+            />
+          </label>
+          <label>
+            Project
+            <input
+              type="text"
+              placeholder="myapp"
+              value={project}
+              onInput={(e) => setProject((e.target as HTMLInputElement).value)}
+            />
+          </label>
+          <label>
+            Token
+            <input
+              type="text"
+              placeholder="project secret (if set on the gateway)"
+              value={token}
+              onInput={(e) => setToken((e.target as HTMLInputElement).value)}
+            />
+          </label>
+        </div>
+      )}
+
+      <div class="settings-actions">
+        <button class="settings-apply" onClick={apply} disabled={!customValid}>
+          Apply
+        </button>
+        <button class="settings-cancel" onClick={onClose}>
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// --- Режим подключения в localStorage ---
+
+/** Эффективные параметры подключения для выбранного режима. */
+function effectiveConn(
+  conn: Conn,
+  props: { project: string; token?: string },
+): { gateway: string; project: string; token?: string } {
+  if (conn.mode === 'custom') {
+    return { gateway: conn.gateway || LOCAL_GATEWAY, project: conn.project, token: conn.token || undefined };
+  }
+  return { gateway: LOCAL_GATEWAY, project: props.project, token: props.token };
+}
+
+/** Загружает сохранённый режим; по умолчанию выводит его из data-* атрибутов. */
+function loadConn(props: { project: string; gateway: string; token?: string }): Conn {
+  try {
+    const raw = localStorage.getItem(CONN_KEY);
+    if (raw) {
+      const c = JSON.parse(raw) as Partial<Conn>;
+      if (c && (c.mode === 'claude-code' || c.mode === 'custom')) {
+        return {
+          mode: c.mode,
+          gateway: c.gateway || '',
+          project: c.project || '',
+          token: c.token || '',
+        };
+      }
+    }
+  } catch {
+    /* noop */
+  }
+  // Нет сохранённого выбора: если страница указала нелокальный шлюз — стартуем
+  // в режиме «произвольный» с этими значениями, иначе — claude-code (локальный).
+  const remote = props.gateway && props.gateway !== LOCAL_GATEWAY;
+  return {
+    mode: remote ? 'custom' : 'claude-code',
+    gateway: props.gateway || '',
+    project: props.project,
+    token: props.token || '',
+  };
+}
+
+function saveConn(conn: Conn): void {
+  try {
+    localStorage.setItem(CONN_KEY, JSON.stringify(conn));
+  } catch {
+    /* noop */
+  }
 }
 
 /** Блок кода с кнопкой «копировать». */
